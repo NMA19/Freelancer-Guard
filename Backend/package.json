@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "server": "node server.js",
+    "setup": "npm install && node scripts/setup.js",
+    "db:init": "mysql -u root -p < database/schema.sql",
     "test": "jest",
     "test:watch": "jest --watch"
   },

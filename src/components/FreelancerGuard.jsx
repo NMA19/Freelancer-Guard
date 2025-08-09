@@ -35,112 +35,39 @@ import {
   Clock,
   ExternalLink,
   Heart,
+  LogIn,
+  LogOut,
 } from "lucide-react"
 
+import { useAuth } from "../contexts/AuthContext"
+import { useExperience } from "../contexts/ExperienceContext"
+import AuthModal from "./AuthModal"
+import ExperienceForm from "./ExperienceForm"
+
 const FreelancerGuard = () => {
+  // Get auth and experience contexts
+  const { user, isAuthenticated, logout } = useAuth()
+  const { 
+    experiences, 
+    fetchExperiences, 
+    voteExperience,
+    filters,
+    setFilters
+  } = useExperience()
+
+  // Local state
   const [activeTab, setActiveTab] = useState("experiences")
   const [searchTerm, setSearchTerm] = useState("")
-  const [experiences, setExperiences] = useState([
-    {
-      id: 1,
-      title: "Client didn't pay after 3 months of completed work",
-      category: "Payment Issues",
-      description:
-        "Delivered a complete e-commerce website but client disappeared after delivery. Had to involve legal team to recover payment. Always use escrow services!",
-      rating: 1,
-      likes: 23,
-      views: 156,
-      date: "2025-07-20",
-      author: "WebDev_Pro",
-      clientType: "Individual",
-      projectValue: "$2,500",
-      verified: true,
-      tags: ["web-development", "e-commerce", "payment-dispute"],
-      images: ["/placeholder.svg?height=200&width=300"],
-      comments: [
-        {
-          id: 1,
-          author: "FreelancerHelper",
-          content: "This is exactly why I always use escrow. Sorry this happened to you!",
-          date: "2025-07-21",
-          likes: 5,
-        },
-        {
-          id: 2,
-          author: "LegalAdvice_Pro",
-          content: "Did you have a written contract? That would strengthen your legal position.",
-          date: "2025-07-22",
-          likes: 3,
-        },
-      ],
-    },
-    {
-      id: 2,
-      title: "Amazing long-term partnership with startup",
-      category: "Success Story",
-      description:
-        "Working with this client for 8 months now. Clear communication, fair rates, and always respects deadlines. They even gave me equity in their company!",
-      rating: 5,
-      likes: 47,
-      views: 203,
-      date: "2025-07-25",
-      author: "DesignGuru",
-      clientType: "Startup",
-      projectValue: "$15,000+",
-      verified: true,
-      tags: ["long-term", "startup", "equity", "design"],
-      images: ["/placeholder.svg?height=200&width=300"],
-      comments: [
-        {
-          id: 3,
-          author: "StartupFounder",
-          content: "Great freelancers like you are hard to find. Equity sharing is the way to go!",
-          date: "2025-07-26",
-          likes: 8,
-        },
-      ],
-    },
-    {
-      id: 3,
-      title: "Scope creep nightmare turned into learning experience",
-      category: "Lesson Learned",
-      description:
-        "Client kept adding features without additional payment. Learned to set strict boundaries and use detailed contracts. Now I always include change request procedures.",
-      rating: 2,
-      likes: 18,
-      views: 89,
-      date: "2025-07-15",
-      author: "CodeCrafterXX",
-      clientType: "Agency",
-      projectValue: "$1,200",
-      verified: false,
-      tags: ["scope-creep", "contracts", "boundaries"],
-      images: [],
-      comments: [],
-    },
-  ])
-
-  // New state for enhanced features
-  const [showAddForm, setShowAddForm] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [showExperienceForm, setShowExperienceForm] = useState(false)
+  const [authMode, setAuthMode] = useState("login")
   const [expandedExperience, setExpandedExperience] = useState(null)
   const [showComments, setShowComments] = useState({})
   const [newComment, setNewComment] = useState("")
-  const [notifications, setNotifications] = useState([
-    { id: 1, message: "New comment on your experience", read: false, date: "2025-07-26" },
-    { id: 2, message: "Your experience was verified", read: false, date: "2025-07-25" },
-  ])
   const [showNotifications, setShowNotifications] = useState(false)
-
-  const [formData, setFormData] = useState({
-    title: "",
-    category: "Payment Issues",
-    description: "",
-    rating: 3,
-    clientType: "Individual",
-    projectValue: "",
-    tags: "",
-    images: [],
-  })
+  const [notifications, setNotifications] = useState([
+    { id: 1, message: "Welcome to FreelancerGuard!", read: false, date: new Date().toISOString().split('T')[0] },
+  ])
 
   const [filterCategory, setFilterCategory] = useState("All")
   const [sortBy, setSortBy] = useState("recent")
@@ -148,111 +75,119 @@ const FreelancerGuard = () => {
   const [dateRange, setDateRange] = useState("all")
   const [ratingFilter, setRatingFilter] = useState("all")
 
-  // Load data from localStorage on component mount
+  // Load experiences on component mount
   useEffect(() => {
-    const savedExperiences = localStorage.getItem("freelancerGuardExperiences")
-    if (savedExperiences) {
-      setExperiences(JSON.parse(savedExperiences))
-    }
-  }, [])
+    fetchExperiences()
+  }, [fetchExperiences])
 
-  // Save to localStorage whenever experiences change
+  // Update filters when local filter state changes
   useEffect(() => {
-    localStorage.setItem("freelancerGuardExperiences", JSON.stringify(experiences))
-  }, [experiences])
+    const newFilters = {
+      search: searchTerm,
+      category: filterCategory === "All" ? "" : filterCategory,
+      rating: ratingFilter === "all" ? "" : ratingFilter,
+      sortBy: getSortByValue(sortBy),
+      sortOrder: "DESC"
+    }
+    setFilters(newFilters)
+  }, [searchTerm, filterCategory, ratingFilter, sortBy, setFilters])
+
+  // Debounce search to avoid too many API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm !== filters.search) {
+        fetchExperiences()
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [searchTerm, fetchExperiences, filters.search])
+
+  const getSortByValue = (sortOption) => {
+    switch (sortOption) {
+      case "recent": return "created_at"
+      case "popular": return "upvotes"
+      case "rating": return "rating"
+      case "views": return "views"
+      case "comments": return "comment_count"
+      default: return "created_at"
+    }
+  }
 
   const categories = [
     "All",
     "Payment Issues",
-    "Success Story",
-    "Scam Alert",
-    "Communication Issues",
-    "Lesson Learned",
-    "Red Flags",
-    "Positive Review",
+    "Communication Problems",
+    "Scope Creep",
+    "Late Payments",
+    "Unrealistic Expectations",
+    "Technical Difficulties",
+    "Contract Disputes",
+    "Positive Experience",
+    "Other"
   ]
 
   const clientTypes = ["Individual", "Startup", "Agency", "Enterprise", "Non-profit"]
 
-  const handleLike = (id) => {
-    setExperiences((prev) => prev.map((exp) => (exp.id === id ? { ...exp, likes: exp.likes + 1 } : exp)))
-  }
+  // Event handlers updated for backend integration
+  const handleLike = async (id, currentVoteType) => {
+    if (!isAuthenticated) {
+      setAuthMode("login")
+      setShowAuthModal(true)
+      return
+    }
 
-  const handleCommentLike = (expId, commentId) => {
-    setExperiences((prev) =>
-      prev.map((exp) =>
-        exp.id === expId
-          ? {
-              ...exp,
-              comments: exp.comments.map((comment) =>
-                comment.id === commentId ? { ...comment, likes: comment.likes + 1 } : comment,
-              ),
-            }
-          : exp,
-      ),
-    )
+    const voteType = currentVoteType === "up" ? "down" : "up" // Toggle vote
+    const result = await voteExperience(id, voteType)
+    
+    if (!result.success) {
+      console.error("Failed to vote:", result.error)
+    }
   }
 
   const handleAddComment = (expId) => {
-    if (!newComment.trim()) return
-
-    const comment = {
-      id: Date.now(),
-      author: "Anonymous",
-      content: newComment,
-      date: new Date().toISOString().split("T")[0],
-      likes: 0,
+    if (!isAuthenticated) {
+      setAuthMode("login")
+      setShowAuthModal(true)
+      return
     }
 
-    setExperiences((prev) =>
-      prev.map((exp) => (exp.id === expId ? { ...exp, comments: [...exp.comments, comment] } : exp)),
-    )
+    if (!newComment.trim()) return
 
+    // TODO: Implement comment creation API
+    console.log("Adding comment to experience", expId, newComment)
     setNewComment("")
   }
 
-  const handleImageUpload = (files) => {
-    // In a real app, you'd upload to a server and get URLs back
-    const imageUrls = Array.from(files).map((file) => URL.createObjectURL(file))
-    setFormData((prev) => ({ ...prev, images: [...prev.images, ...imageUrls] }))
+  const handleAddExperience = () => {
+    if (!isAuthenticated) {
+      setAuthMode("login")
+      setShowAuthModal(true)
+      return
+    }
+    setShowExperienceForm(true)
   }
 
-  const handleAddExperience = () => {
-    if (!formData.title.trim() || !formData.description.trim()) return
-
-    const newExp = {
-      id: Date.now(),
-      ...formData,
-      likes: 0,
-      views: 0,
-      date: new Date().toISOString().split("T")[0],
-      author: "Anonymous",
-      verified: false,
-      tags: formData.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-      comments: [],
-    }
-
-    setExperiences([newExp, ...experiences])
-    setShowAddForm(false)
-    setFormData({
-      title: "",
-      category: "Payment Issues",
-      description: "",
-      rating: 3,
-      clientType: "Individual",
-      projectValue: "",
-      tags: "",
-      images: [],
-    })
-
-    // Add notification
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false)
+    // Add welcome notification
     setNotifications((prev) => [
       {
         id: Date.now(),
-        message: "Your experience has been published successfully!",
+        message: `Welcome ${user?.username || 'back'}! You can now share your experiences.`,
+        read: false,
+        date: new Date().toISOString().split("T")[0],
+      },
+      ...prev,
+    ])
+  }
+
+  const handleLogout = () => {
+    logout()
+    setNotifications((prev) => [
+      {
+        id: Date.now(),
+        message: "You have been logged out successfully.",
         read: false,
         date: new Date().toISOString().split("T")[0],
       },
@@ -273,18 +208,20 @@ const FreelancerGuard = () => {
   }
 
   const filteredAndSorted = useMemo(() => {
+    if (!experiences || experiences.length === 0) return []
+
     const filtered = experiences.filter((exp) => {
       const matchesCategory = filterCategory === "All" || exp.category === filterCategory
       const matchesSearch =
-        exp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        exp.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        exp.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+        exp.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        exp.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        exp.client_name?.toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesRating = ratingFilter === "all" || exp.rating >= Number.parseInt(ratingFilter)
 
       let matchesDate = true
       if (dateRange !== "all") {
-        const expDate = new Date(exp.date)
+        const expDate = new Date(exp.created_at || exp.date)
         const now = new Date()
         const daysAgo = Number.parseInt(dateRange)
         const cutoffDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
@@ -295,11 +232,11 @@ const FreelancerGuard = () => {
     })
 
     return filtered.sort((a, b) => {
-      if (sortBy === "recent") return new Date(b.date) - new Date(a.date)
-      if (sortBy === "popular") return b.likes - a.likes
+      if (sortBy === "recent") return new Date(b.created_at || b.date) - new Date(a.created_at || a.date)
+      if (sortBy === "popular") return (b.upvotes || 0) - (a.upvotes || 0)
       if (sortBy === "rating") return b.rating - a.rating
-      if (sortBy === "views") return b.views - a.views
-      if (sortBy === "comments") return b.comments.length - a.comments.length
+      if (sortBy === "views") return (b.views || 0) - (a.views || 0)
+      if (sortBy === "comments") return (b.comment_count || 0) - (a.comment_count || 0)
       return 0
     })
   }, [experiences, filterCategory, searchTerm, sortBy, dateRange, ratingFilter])
@@ -318,12 +255,16 @@ const FreelancerGuard = () => {
     switch (category) {
       case "Payment Issues":
         return <DollarSign className="w-4 h-4 text-red-500" />
-      case "Success Story":
+      case "Positive Experience":
         return <CheckCircle className="w-4 h-4 text-green-500" />
-      case "Scam Alert":
-        return <AlertTriangle className="w-4 h-4 text-red-600" />
-      case "Lesson Learned":
-        return <BookOpen className="w-4 h-4 text-blue-500" />
+      case "Communication Problems":
+        return <MessageCircle className="w-4 h-4 text-orange-500" />
+      case "Contract Disputes":
+        return <FileText className="w-4 h-4 text-purple-500" />
+      case "Scope Creep":
+        return <TrendingUp className="w-4 h-4 text-blue-500" />
+      case "Technical Difficulties":
+        return <AlertCircle className="w-4 h-4 text-yellow-500" />
       default:
         return <MessageCircle className="w-4 h-4 text-gray-500" />
     }
@@ -333,29 +274,31 @@ const FreelancerGuard = () => {
     switch (category) {
       case "Payment Issues":
         return "bg-red-100 text-red-800 border-red-200"
-      case "Success Story":
+      case "Positive Experience":
         return "bg-green-100 text-green-800 border-green-200"
-      case "Scam Alert":
-        return "bg-red-200 text-red-900 border-red-300"
-      case "Lesson Learned":
-        return "bg-blue-100 text-blue-800 border-blue-200"
-      case "Communication Issues":
+      case "Communication Problems":
         return "bg-orange-100 text-orange-800 border-orange-200"
-      case "Red Flags":
+      case "Contract Disputes":
+        return "bg-purple-100 text-purple-800 border-purple-200"
+      case "Scope Creep":
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      case "Technical Difficulties":
         return "bg-yellow-100 text-yellow-800 border-yellow-200"
-      case "Positive Review":
-        return "bg-emerald-100 text-emerald-800 border-emerald-200"
+      case "Late Payments":
+        return "bg-red-100 text-red-800 border-red-200"
+      case "Unrealistic Expectations":
+        return "bg-pink-100 text-pink-800 border-pink-200"
       default:
         return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
   const stats = {
-    totalExperiences: experiences.length,
-    positiveExperiences: experiences.filter((exp) => exp.rating >= 4).length,
-    scamAlerts: experiences.filter((exp) => exp.category === "Scam Alert").length,
-    avgRating: (experiences.reduce((sum, exp) => sum + exp.rating, 0) / experiences.length).toFixed(1),
-    totalComments: experiences.reduce((sum, exp) => sum + exp.comments.length, 0),
+    totalExperiences: experiences?.length || 0,
+    positiveExperiences: experiences?.filter((exp) => exp.rating >= 4).length || 0,
+    scamAlerts: experiences?.filter((exp) => exp.category === "Scam Alert").length || 0,
+    avgRating: experiences?.length ? (experiences.reduce((sum, exp) => sum + exp.rating, 0) / experiences.length).toFixed(1) : "0.0",
+    totalComments: experiences?.reduce((sum, exp) => sum + (exp.comment_count || exp.comments?.length || 0), 0) || 0,
     unreadNotifications: notifications.filter((n) => !n.read).length,
   }
 
@@ -397,38 +340,79 @@ const FreelancerGuard = () => {
               </div>
             </div>
 
-            {/* Notifications */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <Bell className="w-6 h-6" />
-                {stats.unreadNotifications > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {stats.unreadNotifications}
-                  </span>
-                )}
-              </button>
-
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
-                  <div className="p-4 border-b border-gray-200">
-                    <h3 className="font-semibold text-gray-900">Notifications</h3>
+            {/* Authentication and User Section */}
+            <div className="flex items-center gap-4">
+              {isAuthenticated ? (
+                <>
+                  <div className="hidden md:flex items-center gap-2 text-sm text-gray-600">
+                    <User className="w-4 h-4" />
+                    <span>Welcome, {user?.username || 'User'}</span>
                   </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={`p-4 border-b border-gray-100 ${!notification.read ? "bg-blue-50" : ""}`}
-                      >
-                        <p className="text-sm text-gray-800">{notification.message}</p>
-                        <p className="text-xs text-gray-500 mt-1">{notification.date}</p>
-                      </div>
-                    ))}
-                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="hidden md:inline">Logout</span>
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setAuthMode("login")
+                      setShowAuthModal(true)
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    Login
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAuthMode("register")
+                      setShowAuthModal(true)
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                  >
+                    Sign Up
+                  </button>
                 </div>
               )}
+
+              {/* Notifications */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  <Bell className="w-6 h-6" />
+                  {stats.unreadNotifications > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {stats.unreadNotifications}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
+                    <div className="p-4 border-b border-gray-200">
+                      <h3 className="font-semibold text-gray-900">Notifications</h3>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`p-4 border-b border-gray-100 ${!notification.read ? "bg-blue-50" : ""}`}
+                        >
+                          <p className="text-sm text-gray-800">{notification.message}</p>
+                          <p className="text-xs text-gray-500 mt-1">{notification.date}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -517,7 +501,7 @@ const FreelancerGuard = () => {
                     </button>
 
                     <button
-                      onClick={() => setShowAddForm(true)}
+                      onClick={handleAddExperience}
                       className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-md"
                     >
                       <Plus className="w-4 h-4" />
@@ -577,158 +561,6 @@ const FreelancerGuard = () => {
               </div>
             </div>
 
-            {/* Enhanced Add Experience Form */}
-            {showAddForm && (
-              <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-100">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-blue-600" />
-                  Share Your Experience
-                </h3>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <input
-                      type="text"
-                      placeholder="Experience title..."
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    {categories.slice(1).map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={formData.clientType}
-                    onChange={(e) => setFormData({ ...formData, clientType: e.target.value })}
-                    className="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    {clientTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-
-                  <input
-                    type="text"
-                    placeholder="Project value (e.g., $500)"
-                    value={formData.projectValue}
-                    onChange={(e) => setFormData({ ...formData, projectValue: e.target.value })}
-                    className="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-
-                  <input
-                    type="text"
-                    placeholder="Tags (comma separated)"
-                    value={formData.tags}
-                    onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                    className="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-
-                  <div className="md:col-span-2">
-                    <textarea
-                      placeholder="Describe your experience in detail..."
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows="4"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Image Upload */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Add Images (Screenshots, contracts, etc.)
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={(e) => handleImageUpload(e.target.files)}
-                        className="hidden"
-                        id="image-upload"
-                      />
-                      <label htmlFor="image-upload" className="cursor-pointer">
-                        <ImageIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600">Click to upload images or drag and drop</p>
-                        <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 10MB each</p>
-                      </label>
-                    </div>
-
-                    {formData.images.length > 0 && (
-                      <div className="grid grid-cols-3 gap-2 mt-4">
-                        {formData.images.map((image, index) => (
-                          <div key={index} className="relative">
-                            <img
-                              src={image || "/placeholder.svg"}
-                              alt={`Upload ${index + 1}`}
-                              className="w-full h-20 object-cover rounded-lg"
-                            />
-                            <button
-                              onClick={() =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  images: prev.images.filter((_, i) => i !== index),
-                                }))
-                              }
-                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-2">Overall Rating</label>
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <button
-                          type="button"
-                          key={rating}
-                          onClick={() => setFormData({ ...formData, rating })}
-                          className="hover:scale-110 transition-transform"
-                        >
-                          <Star
-                            className={`w-8 h-8 ${formData.rating >= rating ? "text-yellow-500 fill-current" : "text-gray-300"}`}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={handleAddExperience}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Publish Experience
-                  </button>
-                  <button
-                    onClick={() => setShowAddForm(false)}
-                    className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Enhanced Experiences Grid */}
             <div className="grid gap-6">
               {filteredAndSorted.map((exp) => (
@@ -742,25 +574,25 @@ const FreelancerGuard = () => {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-xl font-bold text-gray-900">{exp.title}</h3>
-                          {exp.verified && <CheckCircle className="w-5 h-5 text-blue-500" />}
+                          {exp.is_verified && <CheckCircle className="w-5 h-5 text-blue-500" />}
                         </div>
 
                         <div className="flex items-center gap-4 text-sm text-gray-600">
                           <span className="flex items-center gap-1">
                             <User className="w-4 h-4" />
-                            {exp.author}
+                            {exp.username || 'Anonymous'}
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            {new Date(exp.date).toLocaleDateString()}
+                            {new Date(exp.created_at || exp.date).toLocaleDateString()}
                           </span>
                           <span className="flex items-center gap-1">
                             <Eye className="w-4 h-4" />
-                            {exp.views} views
+                            {exp.views || 0} views
                           </span>
                           <span className="flex items-center gap-1">
                             <MessageCircle className="w-4 h-4" />
-                            {exp.comments.length} comments
+                            {exp.comment_count || exp.comments?.length || 0} comments
                           </span>
                         </div>
                       </div>
@@ -788,38 +620,42 @@ const FreelancerGuard = () => {
                       )}
                     </p>
 
-                    {/* Images */}
-                    {exp.images && exp.images.length > 0 && (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
-                        {exp.images.map((image, index) => (
-                          <img
-                            key={index}
-                            src={image || "/placeholder.svg"}
-                            alt={`Experience image ${index + 1}`}
-                            className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => window.open(image, "_blank")}
-                          />
-                        ))}
+                    {/* Evidence URL */}
+                    {exp.evidence_url && (
+                      <div className="mb-4">
+                        <a
+                          href={exp.evidence_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          View Evidence
+                        </a>
                       </div>
                     )}
 
                     {/* Metadata */}
                     <div className="grid md:grid-cols-2 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <Briefcase className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm">
-                          <strong>Client Type:</strong> {exp.clientType}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm">
-                          <strong>Project Value:</strong> {exp.projectValue}
-                        </span>
-                      </div>
+                      {exp.client_name && (
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm">
+                            <strong>Client:</strong> {exp.client_name}
+                          </span>
+                        </div>
+                      )}
+                      {exp.project_value && (
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm">
+                            <strong>Project Value:</strong> ${parseFloat(exp.project_value).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Footer */}
+                    {/* Category and Tags */}
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <div
@@ -828,61 +664,62 @@ const FreelancerGuard = () => {
                           {getCategoryIcon(exp.category)}
                           {exp.category}
                         </div>
-
-                        {exp.tags.length > 0 && (
-                          <div className="flex gap-1">
-                            {exp.tags.slice(0, 3).map((tag) => (
-                              <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
-                                #{tag}
-                              </span>
-                            ))}
-                            {exp.tags.length > 3 && (
-                              <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                +{exp.tags.length - 3}
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </div>
 
+                      {/* Action Buttons */}
                       <div className="flex items-center gap-3">
                         <button
-                          onClick={() => handleLike(exp.id)}
+                          onClick={() => handleLike(exp.id, exp.user_vote_type)}
                           className="flex items-center gap-1 text-blue-600 hover:text-blue-700 transition-colors"
                         >
                           <ThumbsUp className="w-4 h-4" />
-                          <span className="font-medium">{exp.likes}</span>
+                          <span className="font-medium">{exp.upvotes || 0}</span>
                         </button>
+
                         <button
-                          onClick={() => setShowComments((prev) => ({ ...prev, [exp.id]: !prev[exp.id] }))}
+                          onClick={() => handleAddComment(exp.id)}
                           className="flex items-center gap-1 text-gray-600 hover:text-gray-700 transition-colors"
                         >
                           <MessageCircle className="w-4 h-4" />
-                          <span className="font-medium">{exp.comments.length}</span>
+                          Comment
                         </button>
-                        <button className="flex items-center gap-1 text-gray-500 hover:text-gray-700 transition-colors">
+
+                        <button className="flex items-center gap-1 text-gray-600 hover:text-gray-700 transition-colors">
                           <Share2 className="w-4 h-4" />
+                          Share
                         </button>
-                        <button className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors">
+
+                        <button className="flex items-center gap-1 text-red-600 hover:text-red-700 transition-colors">
                           <Flag className="w-4 h-4" />
+                          Report
                         </button>
                       </div>
                     </div>
 
                     {/* Comments Section */}
-                    {showComments[exp.id] && (
+                    {showComments[exp.id] && exp.comments && exp.comments.length > 0 && (
                       <div className="border-t border-gray-200 pt-4">
-                        <h4 className="font-semibold text-gray-900 mb-3">Comments ({exp.comments.length})</h4>
+                        <h4 className="font-semibold mb-3">Comments</h4>
+                        <div className="space-y-3">
+                          {exp.comments.map((comment) => (
+                            <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="font-medium text-sm">{comment.username}</span>
+                                <span className="text-xs text-gray-500">{new Date(comment.created_at).toLocaleDateString()}</span>
+                              </div>
+                              <p className="text-sm text-gray-700">{comment.content}</p>
+                            </div>
+                          ))}
+                        </div>
 
-                        {/* Add Comment */}
-                        <div className="flex gap-3 mb-4">
+                        {/* Add Comment Form */}
+                        <div className="mt-4 flex gap-2">
                           <input
                             type="text"
-                            placeholder="Add a comment..."
                             value={newComment}
                             onChange={(e) => setNewComment(e.target.value)}
-                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            onKeyPress={(e) => e.key === "Enter" && handleAddComment(exp.id)}
+                            placeholder="Add a comment..."
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                           <button
                             onClick={() => handleAddComment(exp.id)}
@@ -891,29 +728,17 @@ const FreelancerGuard = () => {
                             <Send className="w-4 h-4" />
                           </button>
                         </div>
-
-                        {/* Comments List */}
-                        <div className="space-y-3">
-                          {exp.comments.map((comment) => (
-                            <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-gray-900">{comment.author}</span>
-                                  <span className="text-sm text-gray-500">{comment.date}</span>
-                                </div>
-                                <button
-                                  onClick={() => handleCommentLike(exp.id, comment.id)}
-                                  className="flex items-center gap-1 text-gray-500 hover:text-blue-600 transition-colors"
-                                >
-                                  <ThumbsUp className="w-3 h-3" />
-                                  <span className="text-sm">{comment.likes}</span>
-                                </button>
-                              </div>
-                              <p className="text-gray-700">{comment.content}</p>
-                            </div>
-                          ))}
-                        </div>
                       </div>
+                    )}
+
+                    {/* Toggle Comments Button */}
+                    {(exp.comment_count > 0 || exp.comments?.length > 0) && (
+                      <button
+                        onClick={() => setShowComments({ ...showComments, [exp.id]: !showComments[exp.id] })}
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium mt-2"
+                      >
+                        {showComments[exp.id] ? 'Hide' : 'Show'} Comments ({exp.comment_count || exp.comments?.length || 0})
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1306,6 +1131,27 @@ const FreelancerGuard = () => {
           </div>
         )}
       </div>
+
+      {/* Authentication Modal */}
+      {showAuthModal && (
+        <AuthModal
+          mode={authMode}
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
+
+      {/* Experience Form Modal */}
+      {showExperienceForm && (
+        <ExperienceForm
+          onClose={() => setShowExperienceForm(false)}
+          onSuccess={() => {
+            setShowExperienceForm(false)
+            // Refresh experiences
+            fetchExperiences()
+          }}
+        />
+      )}
     </div>
   )
 }
