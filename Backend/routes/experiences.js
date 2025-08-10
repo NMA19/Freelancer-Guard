@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { body, validationResult } = require("express-validator");
-const pool = require("../db");
+const db = require("../db");
 const auth = require("../middleware/auth");
+const { body, validationResult } = require("express-validator");
 
 // @route   GET /api/experiences
 // @desc    Get all experiences with pagination and filters
@@ -24,33 +24,27 @@ router.get("/", async (req, res) => {
       SELECT 
         e.*,
         u.username,
-        (SELECT COUNT(*) FROM votes v WHERE v.experience_id = e.id AND v.vote_type = 'up') as upvotes,
-        (SELECT COUNT(*) FROM votes v WHERE v.experience_id = e.id AND v.vote_type = 'down') as downvotes,
+        (SELECT COUNT(*) FROM votes v WHERE v.target_id = e.id AND v.target_type = 'experience' AND v.vote_type = 'up') as upvotes,
+        (SELECT COUNT(*) FROM votes v WHERE v.target_id = e.id AND v.target_type = 'experience' AND v.vote_type = 'down') as downvotes,
         (SELECT COUNT(*) FROM comments c WHERE c.experience_id = e.id) as comment_count
       FROM experiences e
       JOIN users u ON e.user_id = u.id
-      WHERE e.status = 'approved'
+      WHERE 1=1
     `;
-
-    const queryParams = [];
-
+    
+    const params = [];
+    
     // Add filters
-    if (category) {
+    if (category && category !== "All") {
       query += " AND e.category = ?";
-      queryParams.push(category);
+      params.push(category);
     }
-
-    if (rating) {
-      query += " AND e.rating = ?";
-      queryParams.push(rating);
-    }
-
+    
     if (search) {
-      query += " AND (e.title LIKE ? OR e.description LIKE ? OR e.client_name LIKE ?)";
-      const searchTerm = `%${search}%`;
-      queryParams.push(searchTerm, searchTerm, searchTerm);
+      query += " AND (e.title LIKE ? OR e.description LIKE ? OR u.username LIKE ?)";
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
-
+    
     // Add sorting
     const allowedSortBy = ["created_at", "rating", "title"];
     const allowedSortOrder = ["ASC", "DESC"];
@@ -60,33 +54,33 @@ router.get("/", async (req, res) => {
     
     query += ` ORDER BY e.${validSortBy} ${validSortOrder}`;
     query += " LIMIT ? OFFSET ?";
-    queryParams.push(parseInt(limit), parseInt(offset));
-
-    const [experiences] = await pool.query(query, queryParams);
-
+    params.push(limit, offset);
+    
+    const [experiences] = await db.query(query, params);
+    
     // Get total count for pagination
-    let countQuery = "SELECT COUNT(*) as total FROM experiences e WHERE e.status = 'approved'";
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM experiences e
+      JOIN users u ON e.user_id = u.id
+      WHERE 1=1
+    `;
+    
     const countParams = [];
-
-    if (category) {
+    
+    if (category && category !== "All") {
       countQuery += " AND e.category = ?";
       countParams.push(category);
     }
-
-    if (rating) {
-      countQuery += " AND e.rating = ?";
-      countParams.push(rating);
-    }
-
+    
     if (search) {
-      countQuery += " AND (e.title LIKE ? OR e.description LIKE ? OR e.client_name LIKE ?)";
-      const searchTerm = `%${search}%`;
-      countParams.push(searchTerm, searchTerm, searchTerm);
+      countQuery += " AND (e.title LIKE ? OR e.description LIKE ? OR u.username LIKE ?)";
+      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
-
-    const [countResult] = await pool.query(countQuery, countParams);
+    
+    const [countResult] = await db.query(countQuery, countParams);
     const total = countResult[0].total;
-
+    
     res.json({
       success: true,
       experiences,
@@ -97,6 +91,7 @@ router.get("/", async (req, res) => {
         pages: Math.ceil(total / limit)
       }
     });
+    
   } catch (error) {
     console.error("Get experiences error:", error);
     res.status(500).json({
@@ -113,7 +108,7 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [experiences] = await pool.query(`
+    const [experiences] = await db.query(`
       SELECT 
         e.*,
         u.username,
@@ -132,7 +127,7 @@ router.get("/:id", async (req, res) => {
     }
 
     // Get comments for this experience
-    const [comments] = await pool.query(`
+    const [comments] = await db.query(`
       SELECT c.*, u.username
       FROM comments c
       JOIN users u ON c.user_id = u.id
@@ -159,36 +154,30 @@ router.get("/:id", async (req, res) => {
 // @route   POST /api/experiences
 // @desc    Create new experience
 // @access  Private
-router.post("/", [
-  auth,
+router.post("/", auth, [
   body("title")
     .trim()
-    .isLength({ min: 10, max: 255 })
-    .withMessage("Title must be between 10 and 255 characters"),
+    .isLength({ min: 5, max: 200 })
+    .withMessage("Title must be between 5 and 200 characters"),
   body("description")
     .trim()
-    .isLength({ min: 50 })
-    .withMessage("Description must be at least 50 characters"),
+    .isLength({ min: 10 })
+    .withMessage("Description must be at least 10 characters"),
   body("category")
     .trim()
-    .notEmpty()
-    .withMessage("Category is required"),
+    .isIn(["Web Development", "Mobile Development", "Design", "Writing", "Marketing", "Data Entry", "Translation", "Video Editing", "Photography", "Consulting", "Other"])
+    .withMessage("Invalid category"),
+  body("client_type")
+    .trim()
+    .isIn(["Individual", "Small Business", "Enterprise", "Agency", "Startup", "Non-profit"])
+    .withMessage("Invalid client type"),
   body("rating")
     .isInt({ min: 1, max: 5 })
     .withMessage("Rating must be between 1 and 5"),
-  body("client_name")
-    .optional()
-    .trim()
-    .isLength({ max: 255 })
-    .withMessage("Client name must be less than 255 characters"),
   body("project_value")
     .optional()
     .isFloat({ min: 0 })
-    .withMessage("Project value must be a positive number"),
-  body("evidence_url")
-    .optional()
-    .isURL()
-    .withMessage("Evidence URL must be valid")
+    .withMessage("Project value must be a positive number")
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -203,32 +192,54 @@ router.post("/", [
       title,
       description,
       category,
-      rating,
-      client_name,
+      client_type,
       project_value,
-      evidence_url
+      rating,
+      tags = []
     } = req.body;
 
-    const [result] = await pool.query(`
-      INSERT INTO experiences 
-      (user_id, title, description, category, rating, client_name, project_value, evidence_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      req.user.id,
+    // Determine status based on rating
+    let status = "neutral";
+    if (rating >= 4) status = "positive";
+    else if (rating <= 2) status = "negative";
+
+    const query = `
+      INSERT INTO experiences (
+        user_id, title, description, category, client_type,
+        project_value, rating, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `;
+
+    const [result] = await db.query(query, [
+      req.user.userId,
       title,
       description,
       category,
-      rating,
-      client_name || null,
+      client_type,
       project_value || null,
-      evidence_url || null
+      rating,
+      status
     ]);
+
+    const experienceId = result.insertId;
+
+    // Insert tags if provided
+    if (tags && tags.length > 0) {
+      const tagQueries = tags.map(tag => {
+        return db.query(
+          "INSERT INTO experience_tags (experience_id, tag) VALUES (?, ?)",
+          [experienceId, tag.trim()]
+        );
+      });
+      await Promise.all(tagQueries);
+    }
 
     res.status(201).json({
       success: true,
       message: "Experience created successfully",
-      experienceId: result.insertId
+      experienceId
     });
+
   } catch (error) {
     console.error("Create experience error:", error);
     res.status(500).json({
@@ -238,14 +249,13 @@ router.post("/", [
   }
 });
 
-// @route   PUT /api/experiences/:id/vote
+// @route   POST /api/experiences/:id/vote
 // @desc    Vote on an experience
 // @access  Private
-router.put("/:id/vote", [
-  auth,
-  body("voteType")
+router.post("/:id/vote", auth, [
+  body("vote_type")
     .isIn(["up", "down"])
-    .withMessage("Vote type must be 'up' or 'down'")
+    .withMessage("Vote type must be up or down")
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -256,29 +266,35 @@ router.put("/:id/vote", [
       });
     }
 
-    const { id } = req.params;
-    const { voteType } = req.body;
+    const experienceId = req.params.id;
+    const { vote_type } = req.body;
+    const userId = req.user.userId;
 
-    // Check if experience exists
-    const [experiences] = await pool.query("SELECT id FROM experiences WHERE id = ?", [id]);
-    if (experiences.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Experience not found"
-      });
+    // Check if user already voted
+    const [existingVote] = await db.query(
+      "SELECT * FROM votes WHERE user_id = ? AND target_type = ? AND target_id = ?",
+      [userId, "experience", experienceId]
+    );
+
+    if (existingVote.length > 0) {
+      // Update existing vote
+      await db.query(
+        "UPDATE votes SET vote_type = ? WHERE user_id = ? AND target_type = ? AND target_id = ?",
+        [vote_type, userId, "experience", experienceId]
+      );
+    } else {
+      // Insert new vote
+      await db.query(
+        "INSERT INTO votes (user_id, target_type, target_id, vote_type) VALUES (?, ?, ?, ?)",
+        [userId, "experience", experienceId, vote_type]
+      );
     }
-
-    // Insert or update vote
-    await pool.query(`
-      INSERT INTO votes (experience_id, user_id, vote_type)
-      VALUES (?, ?, ?)
-      ON DUPLICATE KEY UPDATE vote_type = ?
-    `, [id, req.user.id, voteType, voteType]);
 
     res.json({
       success: true,
       message: "Vote recorded successfully"
     });
+
   } catch (error) {
     console.error("Vote error:", error);
     res.status(500).json({

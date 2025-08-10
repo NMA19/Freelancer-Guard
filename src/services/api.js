@@ -1,61 +1,68 @@
-import axios from 'axios';
+const API_BASE_URL = 'http://localhost:5000/api';
 
-// Create axios instance with base configuration
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+class ApiService {
+  async request(endpoint, options = {}) {
+    const url = `${API_BASE_URL}${endpoint}`;
+    
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
 
-// Request interceptor to add auth token
-API.interceptors.request.use(
-  (config) => {
+    // Add auth token if available
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
 
-// Response interceptor for error handling
-API.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Remove invalid token
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // Redirect to login or reload page
-      window.location.reload();
+    try {
+      console.log('🔥 API Request:', url, config); // Debug log
+      const response = await fetch(url, config);
+      
+      const data = await response.json();
+      console.log('🔥 API Response:', data); // Debug log
+      
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
     }
-    return Promise.reject(error);
   }
-);
 
-// Auth API
-export const authAPI = {
-  register: (userData) => API.post('/auth/register', userData),
-  login: (credentials) => API.post('/auth/login', credentials),
-  getProfile: () => API.get('/auth/me'),
-  updateProfile: (userData) => API.put('/auth/profile', userData),
-};
+  // Auth methods
+  async register(userData) {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
 
-// Experiences API
-export const experiencesAPI = {
-  getAll: (params = {}) => API.get('/experiences', { params }),
-  getById: (id) => API.get(`/experiences/${id}`),
-  create: (experienceData) => API.post('/experiences', experienceData),
-  vote: (id, voteType) => API.put(`/experiences/${id}/vote`, { voteType }),
-};
+  async login(credentials) {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  }
 
-// Health check
-export const healthAPI = {
-  check: () => API.get('/health'),
-  status: () => API.get('/'),
-};
+  // Experience methods
+  async getExperiences(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.request(`/experiences${queryString ? `?${queryString}` : ''}`);
+  }
 
-export default API;
+  async createExperience(experienceData) {
+    return this.request('/experiences', {
+      method: 'POST',
+      body: JSON.stringify(experienceData),
+    });
+  }
+}
+
+export default new ApiService();

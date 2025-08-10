@@ -1,211 +1,8 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import apiService from '../services/api';
 
-// Initial state
-const initialState = {
-  user: null,
-  token: localStorage.getItem('token'),
-  isAuthenticated: false,
-  loading: true,
-  error: null,
-};
-
-// Action types
-const AUTH_ACTIONS = {
-  LOGIN_START: 'LOGIN_START',
-  LOGIN_SUCCESS: 'LOGIN_SUCCESS',
-  LOGIN_FAILURE: 'LOGIN_FAILURE',
-  REGISTER_START: 'REGISTER_START',
-  REGISTER_SUCCESS: 'REGISTER_SUCCESS',
-  REGISTER_FAILURE: 'REGISTER_FAILURE',
-  LOGOUT: 'LOGOUT',
-  LOAD_USER: 'LOAD_USER',
-  CLEAR_ERROR: 'CLEAR_ERROR',
-  UPDATE_PROFILE: 'UPDATE_PROFILE',
-};
-
-// Reducer
-const authReducer = (state, action) => {
-  switch (action.type) {
-    case AUTH_ACTIONS.LOGIN_START:
-    case AUTH_ACTIONS.REGISTER_START:
-      return {
-        ...state,
-        loading: true,
-        error: null,
-      };
-
-    case AUTH_ACTIONS.LOGIN_SUCCESS:
-    case AUTH_ACTIONS.REGISTER_SUCCESS:
-      localStorage.setItem('token', action.payload.token);
-      localStorage.setItem('user', JSON.stringify(action.payload.user));
-      return {
-        ...state,
-        user: action.payload.user,
-        token: action.payload.token,
-        isAuthenticated: true,
-        loading: false,
-        error: null,
-      };
-
-    case AUTH_ACTIONS.LOGIN_FAILURE:
-    case AUTH_ACTIONS.REGISTER_FAILURE:
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      return {
-        ...state,
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        loading: false,
-        error: action.payload,
-      };
-
-    case AUTH_ACTIONS.LOGOUT:
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      return {
-        ...state,
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        loading: false,
-        error: null,
-      };
-
-    case AUTH_ACTIONS.LOAD_USER:
-      return {
-        ...state,
-        user: action.payload,
-        isAuthenticated: true,
-        loading: false,
-      };
-
-    case AUTH_ACTIONS.UPDATE_PROFILE:
-      localStorage.setItem('user', JSON.stringify(action.payload));
-      return {
-        ...state,
-        user: action.payload,
-      };
-
-    case AUTH_ACTIONS.CLEAR_ERROR:
-      return {
-        ...state,
-        error: null,
-      };
-
-    default:
-      return state;
-  }
-};
-
-// Create context
 const AuthContext = createContext();
 
-// Provider component
-export const AuthProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(authReducer, initialState);
-
-  // Load user on app start
-  useEffect(() => {
-    const loadUser = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const response = await authAPI.getProfile();
-          dispatch({
-            type: AUTH_ACTIONS.LOAD_USER,
-            payload: response.data.user,
-          });
-        } catch (error) {
-          dispatch({ type: AUTH_ACTIONS.LOGOUT });
-        }
-      } else {
-        dispatch({ type: AUTH_ACTIONS.LOGOUT });
-      }
-    };
-
-    loadUser();
-  }, []);
-
-  // Login function
-  const login = async (credentials) => {
-    dispatch({ type: AUTH_ACTIONS.LOGIN_START });
-    try {
-      const response = await authAPI.login(credentials);
-      dispatch({
-        type: AUTH_ACTIONS.LOGIN_SUCCESS,
-        payload: response.data,
-      });
-      return { success: true, data: response.data };
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Login failed';
-      dispatch({
-        type: AUTH_ACTIONS.LOGIN_FAILURE,
-        payload: errorMessage,
-      });
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  // Register function
-  const register = async (userData) => {
-    dispatch({ type: AUTH_ACTIONS.REGISTER_START });
-    try {
-      const response = await authAPI.register(userData);
-      dispatch({
-        type: AUTH_ACTIONS.REGISTER_SUCCESS,
-        payload: response.data,
-      });
-      return { success: true, data: response.data };
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Registration failed';
-      dispatch({
-        type: AUTH_ACTIONS.REGISTER_FAILURE,
-        payload: errorMessage,
-      });
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  // Logout function
-  const logout = () => {
-    dispatch({ type: AUTH_ACTIONS.LOGOUT });
-  };
-
-  // Update profile function
-  const updateProfile = async (userData) => {
-    try {
-      const response = await authAPI.updateProfile(userData);
-      dispatch({
-        type: AUTH_ACTIONS.UPDATE_PROFILE,
-        payload: response.data.user,
-      });
-      return { success: true, data: response.data };
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Profile update failed';
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  // Clear error function
-  const clearError = () => {
-    dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
-  };
-
-  const value = {
-    ...state,
-    login,
-    register,
-    logout,
-    updateProfile,
-    clearError,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-// Custom hook to use auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -214,4 +11,95 @@ export const useAuth = () => {
   return context;
 };
 
-export default AuthContext;
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    // Check if user is logged in on app start
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+    
+    if (token && userData) {
+      try {
+        setUser(JSON.parse(userData));
+      } catch (err) {
+        console.error('Error parsing user data:', err);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    }
+    setIsLoading(false);
+  }, []);
+
+  const login = async (credentials) => {
+    try {
+      setError(null);
+      setIsLoading(true);
+      
+      console.log('Attempting login with:', credentials); // Debug log
+      const response = await apiService.login(credentials);
+      
+      console.log('Login response:', response); // Debug log
+      
+      if (response.token && response.user) {
+        localStorage.setItem('token', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        setUser(response.user);
+        return { success: true };
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const register = async (userData) => {
+    try {
+      setError(null);
+      setIsLoading(true);
+      
+      console.log('Attempting register with:', userData); // Debug log
+      const response = await apiService.register(userData);
+      
+      console.log('Register response:', response); // Debug log
+      
+      return { success: true, message: response.message };
+    } catch (err) {
+      console.error('Register error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setError(null);
+  };
+
+  const value = {
+    user,
+    login,
+    register,
+    logout,
+    isLoading,
+    error,
+    isAuthenticated: !!user,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
