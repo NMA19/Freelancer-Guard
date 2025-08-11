@@ -3,8 +3,45 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Multer configuration for image uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  // Accept only image files
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed!'), false);
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
 
 // Simple CORS - allow all origins
 app.use(cors({
@@ -13,6 +50,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Serve uploaded images statically
+app.use('/uploads', express.static(uploadsDir));
 
 // Database connection
 const db = mysql.createPool({
@@ -130,11 +170,17 @@ app.get('/api/experiences', async (req, res) => {
     const [experiences] = await db.query(`
       SELECT 
         e.*, 
-        u.username
+        u.username,
+        COALESCE(SUM(CASE WHEN ev.vote_type = 'up' THEN 1 ELSE 0 END), 0) AS upvotes,
+        COALESCE(SUM(CASE WHEN ev.vote_type = 'down' THEN 1 ELSE 0 END), 0) AS downvotes,
+        COUNT(DISTINCT ec.id) AS comment_count
       FROM experiences e 
       JOIN users u ON e.user_id = u.id 
+      LEFT JOIN experience_votes ev ON e.id = ev.experience_id
+      LEFT JOIN experience_comments ec ON e.id = ec.experience_id
+      GROUP BY e.id, u.username
       ORDER BY e.created_at DESC
-      LIMIT 10
+      LIMIT 50
     `);
     
     console.log('Fetched experiences:', experiences.length);
@@ -146,7 +192,8 @@ app.get('/api/experiences', async (req, res) => {
 });
 
 // Add experience
-app.post('/api/experiences', async (req, res) => {
+// Create experience with optional image upload
+app.post('/api/experiences', upload.single('image'), async (req, res) => {
   try {
     const { 
       title, 
@@ -174,18 +221,24 @@ app.post('/api/experiences', async (req, res) => {
     if (rating >= 4) status = 'positive';
     else if (rating <= 2) status = 'negative';
     
+    // Handle uploaded image
+    let imageUrl = null;
+    if (req.file) {
+      imageUrl = `/uploads/${req.file.filename}`;
+    }
+    
     console.log('Creating experience with data:', {
-      title, description, category, client_name, client_email, client_type, rating, project_value, payment_method, project_duration_days
+      title, description, category, client_name, client_email, client_type, rating, project_value, payment_method, project_duration_days, imageUrl
     });
     
     const [result] = await db.query(
       `INSERT INTO experiences (
         user_id, title, description, category, client_name, client_email, 
-        client_type, rating, project_value, payment_method, project_duration_days, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        client_type, rating, project_value, payment_method, project_duration_days, status, image_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         decoded.userId, title, description, category, client_name || null, client_email || null,
-        client_type, rating, project_value || null, payment_method || null, project_duration_days || null, status
+        client_type, rating, project_value || null, payment_method || null, project_duration_days || null, status, imageUrl
       ]
     );
     
@@ -254,6 +307,31 @@ app.post('/api/experiences/:id/vote', async (req, res) => {
   } catch (error) {
     console.error('Vote error:', error);
     res.status(500).json({ error: 'Failed to vote: ' + error.message });
+  }
+});
+
+// Get user's vote for a specific experience
+app.get('/api/experiences/:id/user-vote', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader) {
+      return res.json({ voteType: null });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, 'your-secret-key-12345');
+    
+    const [vote] = await db.query(
+      'SELECT vote_type FROM experience_votes WHERE experience_id = ? AND user_id = ?',
+      [id, decoded.userId]
+    );
+    
+    res.json({ voteType: vote.length > 0 ? vote[0].vote_type : null });
+  } catch (error) {
+    console.error('User vote check error:', error);
+    res.json({ voteType: null });
   }
 });
 

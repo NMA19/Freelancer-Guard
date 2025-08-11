@@ -107,6 +107,145 @@ const NotificationBell = ({ user }) => {
   );
 };
 
+// Rules Page Component
+const RulesPage = () => {
+  return (
+    <div className="rules-page">
+      <div className="rules-container">
+        <h2>📋 FreelancerGuard Community Rules</h2>
+        <p className="rules-intro">
+          Welcome to FreelancerGuard! To maintain a supportive and professional community, 
+          please follow these guidelines when sharing experiences.
+        </p>
+        
+        <div className="rules-section">
+          <h3 className="do-section">✅ DO's - What We Encourage</h3>
+          <div className="rules-list do-list">
+            <div className="rule-item">
+              <span className="rule-icon">✅</span>
+              <div className="rule-content">
+                <strong>Be Honest and Factual</strong>
+                <p>Share genuine experiences with accurate details about your interactions with clients.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">✅</span>
+              <div className="rule-content">
+                <strong>Provide Constructive Feedback</strong>
+                <p>Help others by sharing specific details about communication, payment, and project scope.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">✅</span>
+              <div className="rule-content">
+                <strong>Use Professional Language</strong>
+                <p>Maintain a respectful tone even when describing negative experiences.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">✅</span>
+              <div className="rule-content">
+                <strong>Protect Privacy</strong>
+                <p>Use client company names or initials instead of full personal names when possible.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">✅</span>
+              <div className="rule-content">
+                <strong>Include Evidence</strong>
+                <p>Back up your claims with screenshots, emails, or other documentation when relevant.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">✅</span>
+              <div className="rule-content">
+                <strong>Help Others Learn</strong>
+                <p>Share lessons learned and tips for avoiding similar situations.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rules-section">
+          <h3 className="dont-section">❌ DON'Ts - What to Avoid</h3>
+          <div className="rules-list dont-list">
+            <div className="rule-item">
+              <span className="rule-icon">❌</span>
+              <div className="rule-content">
+                <strong>Don't Post False Information</strong>
+                <p>Fabricated or exaggerated experiences damage the community's credibility.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">❌</span>
+              <div className="rule-content">
+                <strong>Don't Use Offensive Language</strong>
+                <p>Profanity, hate speech, or discriminatory language is not tolerated.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">❌</span>
+              <div className="rule-content">
+                <strong>Don't Share Personal Details</strong>
+                <p>Avoid posting full names, addresses, phone numbers, or other sensitive information.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">❌</span>
+              <div className="rule-content">
+                <strong>Don't Spam or Self-Promote</strong>
+                <p>This is not a platform for advertising your services or unrelated content.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">❌</span>
+              <div className="rule-content">
+                <strong>Don't Retaliate</strong>
+                <p>Don't create fake accounts or post revenge experiences. Keep it professional.</p>
+              </div>
+            </div>
+            <div className="rule-item">
+              <span className="rule-icon">❌</span>
+              <div className="rule-content">
+                <strong>Don't Violate Confidentiality</strong>
+                <p>Respect NDAs and confidentiality agreements you may have with clients.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rules-section">
+          <h3 className="guidelines-section">💡 Community Guidelines</h3>
+          <div className="guidelines-list">
+            <div className="guideline-item">
+              <strong>Voting System:</strong> Use upvotes for helpful, accurate experiences and downvotes for suspicious or unhelpful content.
+            </div>
+            <div className="guideline-item">
+              <strong>Comment Respectfully:</strong> When commenting on experiences, be constructive and supportive.
+            </div>
+            <div className="guideline-item">
+              <strong>Report Issues:</strong> If you notice violations of these rules, please report them to moderators.
+            </div>
+            <div className="guideline-item">
+              <strong>Update Experiences:</strong> If circumstances change with a client, consider updating your review.
+            </div>
+          </div>
+        </div>
+
+        <div className="rules-footer">
+          <p>
+            <strong>Remember:</strong> FreelancerGuard is built by freelancers, for freelancers. 
+            Let's work together to create a trustworthy community that protects and empowers all of us.
+          </p>
+          <p className="last-updated">
+            Last updated: {new Date().toLocaleDateString()}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Enhanced User Analytics Dashboard
 const UserDashboard = ({ user }) => {
   const [analytics, setAnalytics] = useState(null);
@@ -159,6 +298,18 @@ const UserDashboard = ({ user }) => {
     </div>
   );
 };
+
+// Loading Component
+const LoadingSpinner = ({ message = "Loading..." }) => (
+  <div className="loading-container">
+    <div className="loading-spinner">
+      <div className="spinner-ring"></div>
+      <div className="spinner-ring"></div>
+      <div className="spinner-ring"></div>
+    </div>
+    <p className="loading-message">{message}</p>
+  </div>
+);
 
 // Enhanced Search and Filters
 const SearchAndFilters = ({ onSearch, onFilter }) => {
@@ -237,6 +388,31 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [userVote, setUserVote] = useState(null);
+  const [isVoting, setIsVoting] = useState(false);
+  const [isCommenting, setIsCommenting] = useState(false);
+  const [localUpvotes, setLocalUpvotes] = useState(experience.upvotes || 0);
+  const [localDownvotes, setLocalDownvotes] = useState(experience.downvotes || 0);
+
+  // Check user's current vote on mount
+  useEffect(() => {
+    const checkUserVote = async () => {
+      if (user) {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`http://localhost:5000/api/experiences/${experience.id}/user-vote`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setUserVote(data.voteType);
+          }
+        } catch (error) {
+          console.error('Error checking user vote:', error);
+        }
+      }
+    };
+    checkUserVote();
+  }, [experience.id, user]);
 
   const fetchComments = async () => {
     try {
@@ -252,29 +428,109 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
 
   const handleVote = async (voteType) => {
     if (!user) {
-      alert('Please login to vote');
+      // Create a beautiful login prompt
+      const loginPrompt = document.createElement('div');
+      loginPrompt.className = 'login-prompt';
+      loginPrompt.innerHTML = `
+        <div class="login-prompt-content">
+          <h3>🔐 Login Required</h3>
+          <p>Please login to vote on experiences</p>
+          <button onclick="this.parentElement.parentElement.remove()" class="login-prompt-btn">OK</button>
+        </div>
+      `;
+      document.body.appendChild(loginPrompt);
+      setTimeout(() => loginPrompt.remove(), 3000);
       return;
+    }
+    
+    setIsVoting(true);
+    
+    // Optimistic update
+    const wasVoted = userVote === voteType;
+    const oldUserVote = userVote;
+    
+    if (wasVoted) {
+      // Remove vote
+      setUserVote(null);
+      if (voteType === 'up') {
+        setLocalUpvotes(prev => Math.max(0, prev - 1));
+      } else {
+        setLocalDownvotes(prev => Math.max(0, prev - 1));
+      }
+    } else {
+      // Add new vote or change vote
+      if (oldUserVote) {
+        // Changing vote
+        if (oldUserVote === 'up') {
+          setLocalUpvotes(prev => Math.max(0, prev - 1));
+        } else {
+          setLocalDownvotes(prev => Math.max(0, prev - 1));
+        }
+      }
+      
+      setUserVote(voteType);
+      if (voteType === 'up') {
+        setLocalUpvotes(prev => prev + 1);
+      } else {
+        setLocalDownvotes(prev => prev + 1);
+      }
     }
     
     const result = await onVote(experience.id, voteType);
     if (result) {
-      setUserVote(voteType);
+      // Add visual feedback
+      const button = document.querySelector(`[data-experience="${experience.id}"] .vote-btn.${voteType === 'up' ? 'upvote' : 'downvote'}`);
+      if (button) {
+        button.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+          button.style.transform = '';
+        }, 200);
+      }
+    } else {
+      // Revert optimistic update on failure
+      setUserVote(oldUserVote);
+      setLocalUpvotes(experience.upvotes || 0);
+      setLocalDownvotes(experience.downvotes || 0);
     }
+    setIsVoting(false);
   };
 
   const handleComment = async () => {
     if (!user) {
-      alert('Please login to comment');
+      const loginPrompt = document.createElement('div');
+      loginPrompt.className = 'login-prompt';
+      loginPrompt.innerHTML = `
+        <div class="login-prompt-content">
+          <h3>🔐 Login Required</h3>
+          <p>Please login to comment on experiences</p>
+          <button onclick="this.parentElement.parentElement.remove()" class="login-prompt-btn">OK</button>
+        </div>
+      `;
+      document.body.appendChild(loginPrompt);
+      setTimeout(() => loginPrompt.remove(), 3000);
       return;
     }
     
     if (!newComment.trim()) return;
     
+    setIsCommenting(true);
     const result = await onComment(experience.id, newComment);
     if (result) {
       setNewComment('');
       fetchComments();
+      // Add success animation
+      const commentForm = document.querySelector(`[data-experience="${experience.id}"] .comment-submit`);
+      if (commentForm) {
+        const originalText = commentForm.textContent;
+        commentForm.textContent = '✓ Posted!';
+        commentForm.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        setTimeout(() => {
+          commentForm.textContent = originalText;
+          commentForm.style.background = '';
+        }, 2000);
+      }
     }
+    setIsCommenting(false);
   };
 
   const toggleComments = () => {
@@ -288,11 +544,22 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
     return '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
   };
 
+  const getRatingColor = (rating) => {
+    if (rating >= 4) return '#28a745';
+    if (rating >= 3) return '#ffc107';
+    return '#dc3545';
+  };
+
   return (
-    <div className="experience-card">
+    <div className="experience-card" data-experience={experience.id}>
       <div className="experience-header">
         <h3>{experience.title}</h3>
-        <span className="rating">{getStars(experience.rating)}</span>
+        <div className="rating-container">
+          <span className="rating" style={{ color: getRatingColor(experience.rating) }}>
+            {getStars(experience.rating)}
+          </span>
+          <span className="rating-number">({experience.rating}/5)</span>
+        </div>
       </div>
       
       <div className="experience-meta">
@@ -307,26 +574,57 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
         {experience.is_verified && <span className="verified">✅ Verified</span>}
       </div>
       
+      {experience.image_url && (
+        <div className="experience-image">
+          <img 
+            src={`http://localhost:5000${experience.image_url}`} 
+            alt="Project screenshot"
+            className="project-image"
+            onClick={() => {
+              // Open image in modal
+              const modal = document.createElement('div');
+              modal.className = 'image-modal';
+              modal.innerHTML = `
+                <div class="image-modal-content">
+                  <img src="http://localhost:5000${experience.image_url}" alt="Project screenshot" />
+                  <button class="close-modal">✕</button>
+                </div>
+              `;
+              document.body.appendChild(modal);
+              modal.querySelector('.close-modal').onclick = () => modal.remove();
+              modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+              };
+            }}
+          />
+        </div>
+      )}
+      
       <p className="description">{experience.description}</p>
       
       <div className="experience-actions">
         <div className="vote-section">
           <button 
-            className={`vote-btn upvote ${userVote === 'up' ? 'active' : ''}`}
+            className={`vote-btn upvote ${userVote === 'up' ? 'active' : ''} ${isVoting ? 'loading' : ''}`}
             onClick={() => handleVote('up')}
+            disabled={isVoting}
           >
-            👍 {experience.upvotes || 0}
+            <span className="vote-icon">👍</span>
+            <span>{localUpvotes}</span>
           </button>
           <button 
-            className={`vote-btn downvote ${userVote === 'down' ? 'active' : ''}`}
+            className={`vote-btn downvote ${userVote === 'down' ? 'active' : ''} ${isVoting ? 'loading' : ''}`}
             onClick={() => handleVote('down')}
+            disabled={isVoting}
           >
-            👎 {experience.downvotes || 0}
+            <span className="vote-icon">👎</span>
+            <span>{localDownvotes}</span>
           </button>
         </div>
         
         <button className="comment-toggle" onClick={toggleComments}>
-          💬 Comments ({experience.comment_count || 0})
+          <span className="comment-icon">💬</span>
+          <span>Comments ({experience.comment_count || 0})</span>
         </button>
       </div>
       
@@ -339,19 +637,35 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="Share your thoughts..."
                 rows="3"
+                className="comment-textarea"
               />
-              <button onClick={handleComment}>Post Comment</button>
+              <button 
+                onClick={handleComment}
+                disabled={isCommenting || !newComment.trim()}
+                className={`comment-submit ${isCommenting ? 'loading' : ''}`}
+              >
+                {isCommenting ? '⏳ Posting...' : '📝 Post Comment'}
+              </button>
             </div>
           )}
           
           <div className="comments-list">
-            {comments.map(comment => (
-              <div key={comment.id} className="comment">
-                <strong>{comment.username}</strong>
-                <p>{comment.comment}</p>
-                <small>{new Date(comment.created_at).toLocaleDateString()}</small>
+            {comments.length === 0 ? (
+              <div className="no-comments">
+                <span>💭</span>
+                <p>No comments yet. Be the first to share your thoughts!</p>
               </div>
-            ))}
+            ) : (
+              comments.map(comment => (
+                <div key={comment.id} className="comment">
+                  <div className="comment-header">
+                    <strong className="comment-author">👤 {comment.username}</strong>
+                    <small className="comment-date">{new Date(comment.created_at).toLocaleDateString()}</small>
+                  </div>
+                  <p className="comment-text">{comment.comment}</p>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -399,10 +713,26 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
     payment_method: '',
     project_duration_days: ''
   });
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    setIsSubmitting(true);
+    
+    // Create FormData to handle file upload
+    const submitData = new FormData();
+    Object.keys(formData).forEach(key => {
+      submitData.append(key, formData[key]);
+    });
+    
+    if (selectedImage) {
+      submitData.append('image', selectedImage);
+    }
+    
+    await onSubmit(submitData);
+    setIsSubmitting(false);
   };
 
   const handleChange = (e) => {
@@ -410,6 +740,31 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
       ...formData,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+      
+      setSelectedImage(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    document.getElementById('image-upload').value = '';
   };
 
   return (
@@ -424,6 +779,7 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
           value={formData.title}
           onChange={handleChange}
           required
+          className="form-input"
         />
         
         <textarea
@@ -433,6 +789,7 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
           onChange={handleChange}
           rows="4"
           required
+          className="form-textarea"
         />
         
         <input
@@ -442,6 +799,7 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
           value={formData.client_name}
           onChange={handleChange}
           required
+          className="form-input"
         />
         
         <input
@@ -450,10 +808,35 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
           placeholder="Client email (optional)"
           value={formData.client_email}
           onChange={handleChange}
+          className="form-input"
         />
+
+        {/* Image Upload Section */}
+        <div className="image-upload-section">
+          <label className="image-upload-label">
+            <span className="upload-icon">📸</span>
+            <span>Add Project Image (Optional)</span>
+            <input
+              id="image-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="image-upload-input"
+            />
+          </label>
+          
+          {imagePreview && (
+            <div className="image-preview">
+              <img src={imagePreview} alt="Preview" className="preview-image" />
+              <button type="button" onClick={removeImage} className="remove-image-btn">
+                ❌ Remove
+              </button>
+            </div>
+          )}
+        </div>
         
         <div className="form-row">
-          <select name="category" value={formData.category} onChange={handleChange}>
+          <select name="category" value={formData.category} onChange={handleChange} className="form-select">
             <option value="Web Development">Web Development</option>
             <option value="Mobile Development">Mobile Development</option>
             <option value="Design">Design</option>
@@ -467,7 +850,7 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
             <option value="Other">Other</option>
           </select>
           
-          <select name="client_type" value={formData.client_type} onChange={handleChange}>
+          <select name="client_type" value={formData.client_type} onChange={handleChange} className="form-select">
             <option value="Individual">Individual</option>
             <option value="Small Business">Small Business</option>
             <option value="Enterprise">Enterprise</option>
@@ -486,6 +869,7 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
             onChange={handleChange}
             min="0"
             step="0.01"
+            className="form-input"
           />
           <input
             type="text"
@@ -493,6 +877,7 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
             placeholder="Payment method"
             value={formData.payment_method}
             onChange={handleChange}
+            className="form-input"
           />
         </div>
         
@@ -503,11 +888,12 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
           value={formData.project_duration_days}
           onChange={handleChange}
           min="1"
+          className="form-input"
         />
         
         <div className="rating-section">
           <label>Rating: </label>
-          <select name="rating" value={formData.rating} onChange={handleChange}>
+          <select name="rating" value={formData.rating} onChange={handleChange} className="form-select">
             <option value="5">⭐⭐⭐⭐⭐ Excellent</option>
             <option value="4">⭐⭐⭐⭐☆ Good</option>
             <option value="3">⭐⭐⭐☆☆ Average</option>
@@ -517,8 +903,12 @@ const ExperienceForm = ({ onSubmit, onCancel }) => {
         </div>
         
         <div className="form-actions">
-          <button type="submit">🚀 Share Experience</button>
-          <button type="button" onClick={onCancel}>❌ Cancel</button>
+          <button type="submit" disabled={isSubmitting} className="submit-btn">
+            {isSubmitting ? '⏳ Sharing...' : '🚀 Share Experience'}
+          </button>
+          <button type="button" onClick={onCancel} className="cancel-btn">
+            ❌ Cancel
+          </button>
         </div>
       </form>
     </div>
@@ -751,19 +1141,44 @@ function App() {
   const handleCreateExperience = async (formData) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/experiences', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
+      
+      // Check if formData is FormData (with file) or regular object
+      let requestOptions;
+      if (formData instanceof FormData) {
+        // FormData for file upload
+        requestOptions = {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+            // Don't set Content-Type for FormData, let browser set it with boundary
+          },
+          body: formData
+        };
+      } else {
+        // Regular JSON data
+        requestOptions = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(formData)
+        };
+      }
+      
+      const response = await fetch('http://localhost:5000/api/experiences', requestOptions);
       
       if (response.ok) {
         setShowExperienceForm(false);
         fetchExperiences();
-        alert('Experience shared successfully!');
+        // Show success message with animation
+        const successMsg = document.createElement('div');
+        successMsg.className = 'success-toast';
+        successMsg.textContent = '✅ Experience shared successfully!';
+        document.body.appendChild(successMsg);
+        setTimeout(() => {
+          successMsg.remove();
+        }, 3000);
       } else {
         const data = await response.json();
         alert(data.error || 'Failed to create experience');
@@ -792,6 +1207,12 @@ function App() {
               onClick={() => setCurrentView('experiences')}
             >
               📝 Experiences
+            </button>
+            <button 
+              className={currentView === 'rules' ? 'active' : ''}
+              onClick={() => setCurrentView('rules')}
+            >
+              📋 Rules
             </button>
             {user && (
               <button 
@@ -829,7 +1250,7 @@ function App() {
           <>
             <SearchAndFilters onSearch={handleSearch} />
             {loadingExperiences ? (
-              <div className="loading">Loading experiences...</div>
+              <LoadingSpinner message="Loading experiences..." />
             ) : (
               <ExperienceList
                 experiences={filteredExperiences}
@@ -839,6 +1260,10 @@ function App() {
               />
             )}
           </>
+        )}
+        
+        {currentView === 'rules' && (
+          <RulesPage />
         )}
         
         {currentView === 'dashboard' && user && (
