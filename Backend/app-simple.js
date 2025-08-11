@@ -106,8 +106,23 @@ app.post('/api/auth/register', async (req, res) => {
       [username, email, hashedPassword]
     );
     
+    // Create token for immediate login
+    const token = jwt.sign(
+      { userId: result.insertId, email: email },
+      'your-secret-key-12345',
+      { expiresIn: '7d' }
+    );
+    
     console.log('User registered successfully:', result.insertId);
-    res.json({ message: 'User registered successfully', userId: result.insertId });
+    res.json({ 
+      message: 'User registered successfully', 
+      token,
+      user: {
+        id: result.insertId,
+        username: username,
+        email: email
+      }
+    });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Registration failed: ' + error.message });
@@ -145,7 +160,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       'your-secret-key-12345',
-      { expiresIn: '24h' }
+      { expiresIn: '7d' } // Extended to 7 days
     );
     
     console.log('Login successful for user:', user.id);

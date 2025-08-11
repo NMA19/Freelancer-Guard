@@ -662,7 +662,7 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
                     <strong className="comment-author">👤 {comment.username}</strong>
                     <small className="comment-date">{new Date(comment.created_at).toLocaleDateString()}</small>
                   </div>
-                  <p className="comment-text">{comment.comment}</p>
+                  <p className="comment-text">{comment.content}</p>
                 </div>
               ))
             )}
@@ -1103,12 +1103,22 @@ function App() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ vote_type: voteType })
+        body: JSON.stringify({ voteType: voteType })
       });
       
       if (response.ok) {
         fetchExperiences(); // Refresh experiences
         return true;
+      } else if (response.status === 401) {
+        // Token expired or invalid
+        const data = await response.json();
+        if (data.error && data.error.includes('expired')) {
+          alert('⏰ Your session has expired. Please login again to vote.');
+          logout();
+          setShowAuthModal(true);
+          setAuthMode('login');
+        }
+        return false;
       }
     } catch (error) {
       console.error('Error voting:', error);
@@ -1125,12 +1135,22 @@ function App() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ comment })
+        body: JSON.stringify({ content: comment })
       });
       
       if (response.ok) {
         fetchExperiences(); // Refresh experiences
         return true;
+      } else if (response.status === 401) {
+        // Token expired or invalid
+        const data = await response.json();
+        if (data.error && data.error.includes('expired')) {
+          alert('⏰ Your session has expired. Please login again to comment.');
+          logout();
+          setShowAuthModal(true);
+          setAuthMode('login');
+        }
+        return false;
       }
     } catch (error) {
       console.error('Error commenting:', error);
@@ -1179,9 +1199,23 @@ function App() {
         setTimeout(() => {
           successMsg.remove();
         }, 3000);
+      } else if (response.status === 401) {
+        // Token expired or invalid
+        const data = await response.json();
+        if (data.error && data.error.includes('expired')) {
+          alert('⏰ Your session has expired. Please login again to continue.');
+          logout(); // This will clear the token and user data
+          setShowAuthModal(true);
+          setAuthMode('login');
+        } else {
+          alert('❌ Authentication failed. Please login again.');
+          logout();
+          setShowAuthModal(true);
+          setAuthMode('login');
+        }
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to create experience');
+        alert('❌ ' + (data.error || 'Failed to create experience'));
       }
     } catch (error) {
       alert('Error creating experience: ' + error.message);
