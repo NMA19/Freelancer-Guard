@@ -426,7 +426,13 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
     }
   };
 
-  const handleVote = async (voteType) => {
+  const handleVote = async (voteType, event) => {
+    // Simple and effective scroll prevention
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
     if (!user) {
       // Create a beautiful login prompt
       const loginPrompt = document.createElement('div');
@@ -445,22 +451,35 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
     
     setIsVoting(true);
     
-    // Optimistic update
+    // Check if user is clicking the same vote (to remove it)
     const wasVoted = userVote === voteType;
     const oldUserVote = userVote;
     
     if (wasVoted) {
-      // Remove vote
+      // User wants to remove their vote - don't send to backend
+      // Just update local state
       setUserVote(null);
       if (voteType === 'up') {
         setLocalUpvotes(prev => Math.max(0, prev - 1));
       } else {
         setLocalDownvotes(prev => Math.max(0, prev - 1));
       }
+      
+      // Add visual feedback for vote removal
+      const button = document.querySelector(`[data-experience="${experience.id}"] .vote-btn.${voteType === 'up' ? 'upvote' : 'downvote'}`);
+      if (button) {
+        button.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+          button.style.transform = '';
+        }, 200);
+      }
+      
+      setIsVoting(false);
+      return; // Don't call backend for vote removal
     } else {
-      // Add new vote or change vote
+      // User is adding a new vote or changing vote
       if (oldUserVote) {
-        // Changing vote
+        // Changing vote - update counters
         if (oldUserVote === 'up') {
           setLocalUpvotes(prev => Math.max(0, prev - 1));
         } else {
@@ -474,28 +493,107 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
       } else {
         setLocalDownvotes(prev => prev + 1);
       }
-    }
-    
-    const result = await onVote(experience.id, voteType);
-    if (result) {
-      // Add visual feedback
-      const button = document.querySelector(`[data-experience="${experience.id}"] .vote-btn.${voteType === 'up' ? 'upvote' : 'downvote'}`);
-      if (button) {
-        button.style.transform = 'scale(1.2)';
-        setTimeout(() => {
-          button.style.transform = '';
-        }, 200);
+      
+      // Call backend to save the vote
+      const result = await onVote(experience.id, voteType);
+      if (result) {
+        // Add enhanced visual feedback with ripple effect
+        const button = document.querySelector(`[data-experience="${experience.id}"] .vote-btn.${voteType === 'up' ? 'upvote' : 'downvote'}`);
+        if (button) {
+          // Create ripple effect
+          const ripple = document.createElement('span');
+          ripple.className = 'ripple-effect';
+          ripple.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.6);
+            transform: translate(-50%, -50%);
+            animation: ripple-animation 0.6s ease-out;
+            pointer-events: none;
+          `;
+          
+          // Add ripple keyframe if not exists
+          if (!document.querySelector('#ripple-keyframes')) {
+            const style = document.createElement('style');
+            style.id = 'ripple-keyframes';
+            style.textContent = `
+              @keyframes ripple-animation {
+                to {
+                  width: 50px;
+                  height: 50px;
+                  opacity: 0;
+                }
+              }
+            `;
+            document.head.appendChild(style);
+          }
+          
+          button.style.position = 'relative';
+          button.appendChild(ripple);
+          
+          // Success animation
+          button.style.transform = 'scale(1.15)';
+          setTimeout(() => {
+            button.style.transform = '';
+            if (ripple.parentNode) {
+              ripple.parentNode.removeChild(ripple);
+            }
+          }, 300);
+        }
+      } else {
+        // Revert optimistic update on failure
+        setUserVote(oldUserVote);
+        setLocalUpvotes(experience.upvotes || 0);
+        setLocalDownvotes(experience.downvotes || 0);
+        
+        // Show error feedback
+        const button = document.querySelector(`[data-experience="${experience.id}"] .vote-btn.${voteType === 'up' ? 'upvote' : 'downvote'}`);
+        if (button) {
+          button.style.background = 'linear-gradient(145deg, #dc3545, #c82333)';
+          button.style.color = 'white';
+          setTimeout(() => {
+            button.style.background = '';
+            button.style.color = '';
+          }, 1000);
+        }
+        
+        // Show error message
+        const errorMsg = document.createElement('div');
+        errorMsg.className = 'vote-error-message';
+        errorMsg.innerHTML = `
+          <div style="
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(145deg, #dc3545, #c82333);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+            z-index: 10000;
+            animation: slideInRight 0.3s ease-out;
+          ">
+            ❌ Vote failed. Please try again.
+          </div>
+        `;
+        document.body.appendChild(errorMsg);
+        setTimeout(() => errorMsg.remove(), 3000);
       }
-    } else {
-      // Revert optimistic update on failure
-      setUserVote(oldUserVote);
-      setLocalUpvotes(experience.upvotes || 0);
-      setLocalDownvotes(experience.downvotes || 0);
     }
     setIsVoting(false);
   };
 
-  const handleComment = async () => {
+  const handleComment = async (event) => {
+    // Simple and effective scroll prevention
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
     if (!user) {
       const loginPrompt = document.createElement('div');
       loginPrompt.className = 'login-prompt';
@@ -518,15 +616,61 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
     if (result) {
       setNewComment('');
       fetchComments();
-      // Add success animation
+      // Add enhanced success animation
       const commentForm = document.querySelector(`[data-experience="${experience.id}"] .comment-submit`);
       if (commentForm) {
         const originalText = commentForm.textContent;
+        const originalBg = commentForm.style.background;
+        
+        // Success animation sequence
         commentForm.textContent = '✓ Posted!';
         commentForm.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        commentForm.style.transform = 'scale(1.05)';
+        
+        // Add success particle effect
+        for (let i = 0; i < 5; i++) {
+          setTimeout(() => {
+            const particle = document.createElement('div');
+            particle.style.cssText = `
+              position: absolute;
+              width: 4px;
+              height: 4px;
+              background: #28a745;
+              border-radius: 50%;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              animation: particle-burst 0.8s ease-out forwards;
+              pointer-events: none;
+            `;
+            
+            // Add particle animation if not exists
+            if (!document.querySelector('#particle-keyframes')) {
+              const style = document.createElement('style');
+              style.id = 'particle-keyframes';
+              style.textContent = `
+                @keyframes particle-burst {
+                  to {
+                    transform: translate(-50%, -50%) 
+                              translate(${(Math.random() - 0.5) * 60}px, ${(Math.random() - 0.5) * 60}px)
+                              scale(0);
+                    opacity: 0;
+                  }
+                }
+              `;
+              document.head.appendChild(style);
+            }
+            
+            commentForm.style.position = 'relative';
+            commentForm.appendChild(particle);
+            setTimeout(() => particle.remove(), 800);
+          }, i * 100);
+        }
+        
         setTimeout(() => {
           commentForm.textContent = originalText;
-          commentForm.style.background = '';
+          commentForm.style.background = originalBg;
+          commentForm.style.transform = '';
         }, 2000);
       }
     }
@@ -606,23 +750,44 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
         <div className="vote-section">
           <button 
             className={`vote-btn upvote ${userVote === 'up' ? 'active' : ''} ${isVoting ? 'loading' : ''}`}
-            onClick={() => handleVote('up')}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleVote('up', e);
+            }}
             disabled={isVoting}
+            type="button"
           >
             <span className="vote-icon">👍</span>
             <span>{localUpvotes}</span>
           </button>
           <button 
             className={`vote-btn downvote ${userVote === 'down' ? 'active' : ''} ${isVoting ? 'loading' : ''}`}
-            onClick={() => handleVote('down')}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleVote('down', e);
+            }}
             disabled={isVoting}
+            type="button"
           >
             <span className="vote-icon">👎</span>
             <span>{localDownvotes}</span>
           </button>
         </div>
         
-        <button className="comment-toggle" onClick={toggleComments}>
+        <button 
+          className="comment-toggle" 
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleComments();
+          }}
+          type="button"
+        >
           <span className="comment-icon">💬</span>
           <span>Comments ({experience.comment_count || 0})</span>
         </button>
@@ -640,9 +805,15 @@ const ExperienceCard = ({ experience, onVote, onComment, user }) => {
                 className="comment-textarea"
               />
               <button 
-                onClick={handleComment}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleComment(e);
+                }}
                 disabled={isCommenting || !newComment.trim()}
                 className={`comment-submit ${isCommenting ? 'loading' : ''}`}
+                type="button"
               >
                 {isCommenting ? '⏳ Posting...' : '📝 Post Comment'}
               </button>
