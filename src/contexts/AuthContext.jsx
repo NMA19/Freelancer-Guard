@@ -12,23 +12,25 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Mock user for development - start logged in
+  const [user, setUser] = useState({ 
+    id: 1, 
+    username: 'dev_user', 
+    email: 'dev@example.com' 
+  });
+  const [isLoading, setIsLoading] = useState(false); // Set to false for immediate access
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Check if user is logged in on app start
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    
-    if (token && userData) {
-      try {
-        setUser(JSON.parse(userData));
-      } catch (err) {
-        console.error('Error parsing user data:', err);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-      }
+    // Mock token for development
+    if (!localStorage.getItem('token')) {
+      const mockUser = { 
+        id: 1, 
+        username: 'dev_user', 
+        email: 'dev@example.com' 
+      };
+      localStorage.setItem('token', 'mock_token_for_development');
+      localStorage.setItem('user', JSON.stringify(mockUser));
     }
     setIsLoading(false);
   }, []);

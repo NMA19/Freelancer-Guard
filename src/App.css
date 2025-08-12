@@ -432,8 +432,8 @@ html {
     0 8px 16px rgba(0,0,0,0.04),
     inset 0 1px 0 rgba(255,255,255,0.7);
   
-  /* Enhanced animations */
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Simplified animations to prevent glitching */
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
   position: relative;
   overflow: hidden;
   animation: slideInUp 0.6s ease-out;
@@ -442,6 +442,10 @@ html {
   /* Enhanced border effect */
   border-left: 4px solid transparent;
   border-image: linear-gradient(135deg, #667eea, #764ba2) 1;
+  
+  /* Prevent transform conflicts */
+  will-change: transform;
+  transform-style: preserve-3d;
 }
 
 /* Staggered animation delays */
@@ -463,7 +467,7 @@ html {
   }
 }
 
-/* Floating shimmer effect */
+/* Floating shimmer effect - Reduced intensity to prevent glitching */
 .experience-card::before {
   content: '';
   position: absolute;
@@ -474,15 +478,16 @@ html {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255,255,255,0.6),
+    rgba(255,255,255,0.3),
     transparent
   );
-  transition: left 0.8s ease;
+  transition: left 1s ease;
   z-index: 1;
   pointer-events: none;
+  opacity: 0.8;
 }
 
-/* Top gradient line */
+/* Top gradient line - Slower animation to prevent glitching */
 .experience-card::after {
   content: '';
   position: absolute;
@@ -492,8 +497,8 @@ html {
   height: 3px;
   background: linear-gradient(90deg, #667eea, #764ba2, #4facfe, #667eea);
   background-size: 300% 100%;
-  animation: shimmerGlow 4s ease-in-out infinite;
-  opacity: 0.7;
+  animation: shimmerGlow 6s ease-in-out infinite;
+  opacity: 0.6;
   border-radius: 24px 24px 0 0;
 }
 
@@ -503,10 +508,10 @@ html {
 }
 
 .experience-card:hover {
-  transform: translateY(-12px) scale(1.02);
+  transform: translateY(-8px) scale(1.01);
   box-shadow: 
-    0 32px 80px rgba(0,0,0,0.12),
-    0 16px 32px rgba(102, 126, 234, 0.15),
+    0 24px 60px rgba(0,0,0,0.10),
+    0 12px 24px rgba(102, 126, 234, 0.12),
     inset 0 1px 0 rgba(255,255,255,0.9);
   
   /* Enhanced background on hover */
@@ -522,7 +527,7 @@ html {
 
 .experience-card:hover::after {
   opacity: 1;
-  animation-duration: 2s;
+  animation-duration: 3s;
 }
 
 .experience-header {
@@ -530,8 +535,142 @@ html {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 20px;
+  gap: 15px;
   position: relative;
   z-index: 2;
+}
+
+.experience-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0 0 12px 0;
+  line-height: 1.3;
+  background: linear-gradient(135deg, #2d3748, #4a5568);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.experience-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.experience-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: #4a5568;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.experience-meta span:hover {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+}
+
+.experience-meta .rating {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 152, 0, 0.1));
+  border-color: rgba(255, 193, 7, 0.3);
+  color: #e67e22;
+  font-weight: 600;
+}
+
+.experience-content {
+  margin-bottom: 20px;
+}
+
+.experience-description {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #4a5568;
+  margin: 0 0 16px 0;
+  text-align: justify;
+}
+
+.experience-details {
+  background: rgba(248, 250, 252, 0.8);
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.experience-details > div {
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+  color: #4a5568;
+}
+
+.experience-details > div:last-child {
+  margin-bottom: 0;
+}
+
+.experience-details strong {
+  color: #2d3748;
+  font-weight: 600;
+}
+
+.experience-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.experience-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.experience-actions .btn:hover:not(:disabled) {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.experience-actions .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.comments-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: rgba(248, 250, 252, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.comments-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+  color: #2d3748;
+  font-weight: 600;
 }
 
 .experience-header h3 {
@@ -1091,12 +1230,17 @@ html {
   }
 }
 
-/* Responsive Design for Experience Cards */
+/* Enhanced responsive design for experience cards */
 @media (max-width: 768px) {
   .experience-card {
     padding: 20px;
     margin-bottom: 16px;
     border-radius: 16px;
+    transform: none !important; /* Prevent transform issues on mobile */
+  }
+  
+  .experience-card:hover {
+    transform: translateY(-4px) scale(1.01); /* Reduced hover effect for mobile */
   }
   
   .experience-header {
@@ -1105,33 +1249,33 @@ html {
     gap: 12px;
   }
   
+  .experience-actions {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  
+  .experience-actions .btn {
+    justify-content: center;
+    width: 100%;
+    padding: 12px 16px;
+  }
+  
   .rating-container {
     align-items: flex-start;
   }
   
   .experience-meta {
-    gap: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
   }
   
   .experience-meta span {
-    padding: 4px 8px;
-    font-size: 0.8rem;
-  }
-  
-  .experience-actions {
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
-  }
-  
-  .vote-section {
-    justify-content: center;
-  }
-  
-  .vote-btn, .comment-toggle {
-    flex: 1;
-    justify-content: center;
-    min-height: 44px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-radius: 12px;
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.2);
   }
 }
 
@@ -2665,34 +2809,8 @@ html {
   margin-bottom: 10px;
 }
 
-/* Responsive Experience Cards */
+/* Navigation responsive styles - Removed duplicate experience-card rules */
 @media (max-width: 768px) {
-  .experience-card {
-    padding: 15px;
-  }
-  
-  .experience-actions {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
-  
-  .vote-section {
-    justify-content: center;
-  }
-  
-  .experience-meta {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .header-content {
-    flex-direction: column;
-    gap: 15px;
-    text-align: center;
-    padding: 1rem;
-  }
-  
   .nav-tabs {
     order: 2;
     flex-wrap: wrap;
@@ -2733,11 +2851,6 @@ html {
   .nav-tabs button {
     padding: 8px 16px;
     font-size: 0.85rem;
-  }
-  
-  .experience-card {
-    padding: 12px;
-    margin-bottom: 15px;
   }
   
   .vote-btn, .comment-toggle {
@@ -3209,10 +3322,6 @@ form, .comment-form, .experience-form {
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-5px); }
-}
-
-.experience-card:hover {
-  animation: float 3s ease-in-out infinite;
 }
 
 /* Enhanced loading states */

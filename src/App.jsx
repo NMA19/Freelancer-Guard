@@ -154,13 +154,51 @@ const ExperienceCard = ({ exp, onLike, onRefresh }) => {
     }
   };
 
-  const handleLike = async () => {
-    if (!isAuthenticated) {
-      alert('Please login to like');
-      return;
+  const handleVote = async (voteType) => {
+    try {
+      // Convert 'up'/'down' to 'upvote'/'downvote' for backend
+      const vote_type = voteType === 'up' ? 'upvote' : 'downvote';
+      console.log(`🗳️ Voting ${vote_type} for experience ${exp.id}`);
+      
+      const response = await fetch(`http://localhost:5000/api/experiences/${exp.id}/vote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ vote_type })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update the experience with new vote counts from response
+        if (data.experience) {
+          exp.upvotes = data.experience.upvotes;
+          exp.downvotes = data.experience.downvotes;
+        }
+        
+        // Refresh the experiences list to show updated counts
+        if (onRefresh) {
+          onRefresh();
+        }
+        
+        console.log(`✅ Vote recorded: ${exp.upvotes} up, ${exp.downvotes} down`);
+      } else {
+        console.error('❌ Failed to record vote:', data.error);
+      }
+    } catch (error) {
+      console.error('❌ Error voting:', error);
     }
-    
-    await onLike(exp.id);
+  };
+
+  const loadComments = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/experiences/${exp.id}/comments`);
+      const data = await response.json();
+      setComments(data.comments || []);
+    } catch (error) {
+      console.error('❌ Error loading comments:', error);
+    }
   };
 
   return (
@@ -216,12 +254,18 @@ const ExperienceCard = ({ exp, onLike, onRefresh }) => {
 
       <div className="experience-actions">
         <button 
-          onClick={handleLike}
+          onClick={() => handleVote('up')}
           className="btn btn-secondary"
           style={{ fontSize: '14px', padding: '5px 10px' }}
-          disabled={!isAuthenticated}
         >
           👍 {exp.upvotes || 0}
+        </button>
+        <button 
+          onClick={() => handleVote('down')}
+          className="btn btn-secondary"
+          style={{ fontSize: '14px', padding: '5px 10px' }}
+        >
+          � {exp.downvotes || 0}
         </button>
         <button 
           onClick={handleToggleComments}
@@ -459,7 +503,7 @@ const ExperienceForm = ({ isOpen, onClose, onSubmit, onExperienceAdded }) => {
     title: '',
     description: '',
     category: 'Web Development',
-    client_type: 'Individual',
+    client_name: '',
     rating: 3,
     project_value: ''
   });
@@ -472,17 +516,40 @@ const ExperienceForm = ({ isOpen, onClose, onSubmit, onExperienceAdded }) => {
     'Photography', 'Consulting', 'Other'
   ];
 
-  const clientTypes = [
-    'Individual', 'Small Business', 'Enterprise', 'Agency', 'Startup', 'Non-profit'
-  ];
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setMessage('');
 
+    // Trim whitespace from all text fields
+    const cleanedFormData = {
+      ...formData,
+      title: formData.title?.trim() || '',
+      description: formData.description?.trim() || '',
+      client_name: formData.client_name?.trim() || '',
+      category: formData.category || 'Web Development',
+      rating: parseInt(formData.rating) || 3,
+      project_value: parseFloat(formData.project_value) || 0
+    };
+
+    console.log('🔍 Form data being submitted:', JSON.stringify(cleanedFormData, null, 2));
+    console.log('🔍 Form data fields:');
+    console.log('  - title:', `"${cleanedFormData.title}" (length: ${cleanedFormData.title.length})`);
+    console.log('  - description:', `"${cleanedFormData.description}" (length: ${cleanedFormData.description.length})`);
+    console.log('  - category:', cleanedFormData.category);
+    console.log('  - client_name:', cleanedFormData.client_name);
+    console.log('  - rating:', cleanedFormData.rating);
+    console.log('  - project_value:', cleanedFormData.project_value);
+
+    // Frontend validation
+    if (!cleanedFormData.title || !cleanedFormData.description) {
+      setMessage('❌ Please fill in both title and description');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const result = await onSubmit(formData);
+      const result = await onSubmit(cleanedFormData);
       if (result.success) {
         setMessage('Experience added successfully!');
         if (onExperienceAdded) onExperienceAdded(); // Refresh the experience list
@@ -493,7 +560,7 @@ const ExperienceForm = ({ isOpen, onClose, onSubmit, onExperienceAdded }) => {
             title: '',
             description: '',
             category: 'Web Development',
-            client_type: 'Individual',
+            client_name: '',
             rating: 3,
             project_value: ''
           });
@@ -557,16 +624,14 @@ const ExperienceForm = ({ isOpen, onClose, onSubmit, onExperienceAdded }) => {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Client Type:</label>
-              <select
-                value={formData.client_type}
-                onChange={(e) => setFormData({...formData, client_type: e.target.value})}
-                className="form-select"
-              >
-                {clientTypes.map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
+              <label className="form-label">Client Name:</label>
+              <input
+                type="text"
+                value={formData.client_name}
+                onChange={(e) => setFormData({...formData, client_name: e.target.value})}
+                className="form-input"
+                placeholder="Enter client or company name"
+              />
             </div>
           </div>
 
@@ -777,13 +842,13 @@ const MainApp = () => {
 
   const handleAddExperience = async (experienceData) => {
     try {
-      console.log('🔥 Adding experience:', experienceData);
+      console.log('🔥 Adding experience:', JSON.stringify(experienceData, null, 2));
       
       const response = await fetch('http://localhost:5000/api/experiences', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
+          // Removed Authorization header for development
         },
         body: JSON.stringify(experienceData)
       });

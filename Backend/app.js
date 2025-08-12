@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const mysql = require("mysql2/promise");
+// const db = require("./mockDB"); // Commented out mock database
 require("dotenv").config();
 
 const app = express();
@@ -19,22 +20,40 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Body parser middleware
-app.use(express.json({ limit: "10mb" }));
+// Body parser middleware with error handling
+app.use(express.json({ 
+  limit: "10mb",
+  verify: (req, res, buf) => {
+    try {
+      JSON.parse(buf);
+    } catch (e) {
+      console.error('❌ JSON Parse Error:', e.message);
+      console.error('❌ Raw body:', buf.toString());
+      res.status(400).json({ error: 'Invalid JSON format' });
+      return;
+    }
+  }
+}));
+
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Database connection - make it available to routes
-const db = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'freelancerguard',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+// JSON error handling middleware
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+    console.error('❌ JSON Syntax Error:', error.message);
+    console.error('❌ Request body:', req.body);
+    return res.status(400).json({ error: 'Invalid JSON syntax in request body' });
+  }
+  next();
 });
 
-// Make db available to routes
+// Database connection - using real MySQL database for PHP admin integration
+const db = require("./db");
+
+// Test database connection on startup
+db.testConnection();
+
+// Make db available to routes  
 app.set('db', db);
 
 // Test route
@@ -163,32 +182,174 @@ app.get('/api/experiences', async (req, res) => {
   }
 });
 
+// Test endpoint for debugging JSON issues
+app.post('/api/test', (req, res) => {
+  console.log('🔍 Test endpoint - Raw body:', req.body);
+  console.log('🔍 Test endpoint - Body type:', typeof req.body);
+  console.log('🔍 Test endpoint - Headers:', req.headers);
+  res.json({ 
+    success: true, 
+    receivedBody: req.body,
+    bodyType: typeof req.body,
+    message: 'Test endpoint working' 
+  });
+});
+
 app.post('/api/experiences', async (req, res) => {
   try {
-    const { title, description, category, client_type, rating, project_value } = req.body;
+    console.log('🔍 Received request body:', JSON.stringify(req.body, null, 2));
+    const { title, description, category, client_name, rating, project_value } = req.body;
     
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: 'No token provided' });
+    console.log('🔍 Extracted fields:');
+    console.log('  - title:', title);
+    console.log('  - description:', description);
+    console.log('  - category:', category);
+    console.log('  - client_name:', client_name);
+    console.log('  - rating:', rating);
+    console.log('  - project_value:', project_value);
+    
+    // For development, we'll use a mock user. In production, implement proper authentication
+    const userId = 1;
+    const username = 'freelancer_user';
+    
+    // Validate required fields
+    const trimmedTitle = title?.trim();
+    const trimmedDescription = description?.trim();
+    
+    if (!trimmedTitle && !trimmedDescription) {
+      console.log('❌ Validation failed - both title and description are missing');
+      return res.status(400).json({ error: 'Both title and description are required' });
     }
     
-    const jwt = require('jsonwebtoken');
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, 'your-secret-key-12345');
+    if (!trimmedTitle) {
+      console.log('❌ Validation failed - title is missing');
+      return res.status(400).json({ error: 'Title is required' });
+    }
     
-    let status = 'neutral';
-    if (rating >= 4) status = 'positive';
-    else if (rating <= 2) status = 'negative';
+    if (!trimmedDescription) {
+      console.log('❌ Validation failed - description is missing');
+      return res.status(400).json({ error: 'Description is required' });
+    }
+    
+    console.log('✅ Validation passed, inserting into database...');
+    
+    // Ensure rating is between 1-5
+    const validRating = Math.max(1, Math.min(5, parseInt(rating) || 3));
     
     const [result] = await db.query(
-      'INSERT INTO experiences (user_id, title, description, category, client_type, rating, project_value, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [decoded.userId, title, description, category, client_type, rating, project_value, status]
+      'INSERT INTO experiences (user_id, username, title, description, category, client_name, rating, project_value, upvotes, downvotes, comment_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, NOW())',
+      [userId, username, trimmedTitle, trimmedDescription, category || 'General', client_name || 'Unknown Client', validRating, parseFloat(project_value) || 0]
     );
     
-    res.json({ message: 'Experience added successfully', experienceId: result.insertId });
+    console.log('✅ Experience added successfully with ID:', result.insertId);
+    
+    res.json({ 
+      message: 'Experience added successfully', 
+      experienceId: result.insertId,
+      success: true 
+    });
   } catch (error) {
-    console.error('Add experience error:', error);
-    res.status(500).json({ error: 'Failed to add experience' });
+    console.error('❌ Add experience error:', error);
+    console.error('❌ Error details:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to add experience', 
+      details: error.message,
+      success: false 
+    });
+  }
+});
+
+// Vote on experience
+app.post('/api/experiences/:id/vote', async (req, res) => {
+  try {
+    const { voteType } = req.body; // 'up' or 'down'
+    const experienceId = parseInt(req.params.id);
+    const userId = 1; // Mock user ID for development
+    
+    if (!['up', 'down'].includes(voteType)) {
+      return res.status(400).json({ error: 'Invalid vote type' });
+    }
+
+    // Check if user already voted
+    const existingVotes = await db.query(
+      'SELECT * FROM votes WHERE target_id = ? AND target_type = ? AND user_id = ?',
+      [experienceId, 'experience', userId]
+    );
+
+    if (existingVotes[0].length > 0) {
+      // Remove existing vote
+      await db.query(
+        'DELETE FROM votes WHERE target_id = ? AND target_type = ? AND user_id = ?',
+        [experienceId, 'experience', userId]
+      );
+    }
+
+    // Add new vote
+    await db.query(
+      'INSERT INTO votes (user_id, target_id, target_type, vote_type) VALUES (?, ?, ?, ?)',
+      [userId, experienceId, 'experience', voteType]
+    );
+
+    // Update vote counts in mock DB if available
+    if (db.updateVoteCounts) {
+      db.updateVoteCounts(experienceId);
+    }
+
+    res.json({ success: true, message: 'Vote recorded successfully' });
+    
+  } catch (error) {
+    console.error('Vote error:', error);
+    res.status(500).json({ error: 'Failed to record vote' });
+  }
+});
+
+// Get comments for experience
+app.get('/api/experiences/:id/comments', async (req, res) => {
+  try {
+    const experienceId = parseInt(req.params.id);
+    const [comments] = await db.query(
+      'SELECT c.*, u.username FROM comments c JOIN users u ON c.user_id = u.id WHERE c.experience_id = ? ORDER BY c.created_at DESC',
+      [experienceId]
+    );
+    
+    res.json(comments);
+    
+  } catch (error) {
+    console.error('Comments error:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+// Add comment to experience
+app.post('/api/experiences/:id/comments', async (req, res) => {
+  try {
+    const { content } = req.body;
+    const experienceId = parseInt(req.params.id);
+    const userId = 1; // Mock user ID for development
+    
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Comment content is required' });
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO comments (experience_id, user_id, content) VALUES (?, ?, ?)',
+      [experienceId, userId, content.trim()]
+    );
+
+    // Update comment counts in mock DB if available
+    if (db.updateCommentCounts) {
+      db.updateCommentCounts(experienceId);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Comment added successfully',
+      commentId: result.insertId 
+    });
+    
+  } catch (error) {
+    console.error('Add comment error:', error);
+    res.status(500).json({ error: 'Failed to add comment' });
   }
 });
 
@@ -201,8 +362,4 @@ app.get("/", (req, res) => {
   });
 });
 
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📝 Test at: http://localhost:${PORT}/api/test`);
-});
+module.exports = app;
