@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>FreelancerGuard API Test</h1>
+    
+    <button onclick="testGetExperiences()">Test GET Experiences</button>
+    <button onclick="testPostExperience()">Test POST Experience</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const resultsDiv = document.getElementById('results');
+        
+        async function testGetExperiences() {
+            try {
+                resultsDiv.innerHTML = 'Testing GET...';
+                const response = await fetch('http://localhost:5000/api/experiences');
+                const data = await response.json();
+                resultsDiv.innerHTML = `<h3>GET Success:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultsDiv.innerHTML = `<h3>GET Error:</h3><pre>${error.message}</pre>`;
+            }
+        }
+        
+        async function testPostExperience() {
+            try {
+                resultsDiv.innerHTML = 'Testing POST...';
+                const response = await fetch('http://localhost:5000/api/experiences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: 'Browser Test Experience',
+                        description: 'Testing from browser',
+                        category: 'Testing',
+                        client_name: 'Browser Client',
+                        rating: 4,
+                        project_value: 500
+                    })
+                });
+                const data = await response.json();
+                resultsDiv.innerHTML = `<h3>POST Success:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultsDiv.innerHTML = `<h3>POST Error:</h3><pre>${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>

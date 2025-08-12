@@ -6,8 +6,13 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// Enhanced CORS middleware
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Database configuration
@@ -21,12 +26,14 @@ const dbConfig = {
 
 // Create connection pool for better performance
 const pool = mysql.createPool({
-  ...dbConfig,
+  host: dbConfig.host,
+  user: dbConfig.user,
+  password: dbConfig.password,
+  database: dbConfig.database,
+  port: dbConfig.port,
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  acquireTimeout: 60000,
-  timeout: 60000
+  connectionLimit: 5,
+  queueLimit: 0
 });
 
 // Initialize database and tables
@@ -34,72 +41,77 @@ async function initializeDatabase() {
   try {
     console.log('🔄 Initializing database...');
     
-    const connection = await pool.getConnection();
+    // Simple connection for database creation
+    const simpleConnection = await mysql.createConnection({
+      host: dbConfig.host,
+      user: dbConfig.user,
+      password: dbConfig.password,
+      port: dbConfig.port
+    });
     
     // Create database if not exists
-    await connection.execute(`CREATE DATABASE IF NOT EXISTS ${dbConfig.database}`);
+    await simpleConnection.query(`CREATE DATABASE IF NOT EXISTS ${dbConfig.database}`);
     console.log(`✅ Database '${dbConfig.database}' ready`);
+    await simpleConnection.end();
     
-    // Use the database
-    await connection.execute(`USE ${dbConfig.database}`);
+    // Now connect to the specific database
+    const connection = await pool.getConnection();
+    
+    // Drop tables in correct order (child tables first to avoid foreign key constraint errors)
+    await connection.query(`SET FOREIGN_KEY_CHECKS = 0`);
+    await connection.query(`DROP TABLE IF EXISTS comments`);
+    await connection.query(`DROP TABLE IF EXISTS votes`);
+    await connection.query(`DROP TABLE IF EXISTS experiences`);
+    await connection.query(`SET FOREIGN_KEY_CHECKS = 1`);
     
     // Create experiences table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS experiences (
+    await connection.query(`
+      CREATE TABLE experiences (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         description TEXT NOT NULL,
         category VARCHAR(100) NOT NULL DEFAULT 'Other',
         client_name VARCHAR(255),
-        rating INT DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
+        rating INT DEFAULT 0,
         project_value DECIMAL(10,2),
         upvotes INT DEFAULT 0,
         downvotes INT DEFAULT 0,
         comment_count INT DEFAULT 0,
         username VARCHAR(100) DEFAULT 'Anonymous',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_category (category),
-        INDEX idx_created_at (created_at),
-        INDEX idx_rating (rating)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
     
     // Create votes table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS votes (
+    await connection.query(`
+      CREATE TABLE votes (
         id INT AUTO_INCREMENT PRIMARY KEY,
         experience_id INT NOT NULL,
         vote_type ENUM('upvote', 'downvote') NOT NULL,
         user_ip VARCHAR(45),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (experience_id) REFERENCES experiences(id) ON DELETE CASCADE,
-        UNIQUE KEY unique_vote (experience_id, user_ip)
+        FOREIGN KEY (experience_id) REFERENCES experiences(id) ON DELETE CASCADE
       )
     `);
     
     // Create comments table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS comments (
+    await connection.query(`
+      CREATE TABLE comments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         experience_id INT NOT NULL,
         content TEXT NOT NULL,
         username VARCHAR(100) DEFAULT 'Anonymous',
         user_ip VARCHAR(45),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (experience_id) REFERENCES experiences(id) ON DELETE CASCADE,
-        INDEX idx_experience_id (experience_id),
-        INDEX idx_created_at (created_at)
+        FOREIGN KEY (experience_id) REFERENCES experiences(id) ON DELETE CASCADE
       )
     `);
     
     console.log('✅ Database tables created/verified');
     
-    // Insert sample data if table is empty
-    const [rows] = await connection.execute('SELECT COUNT(*) as count FROM experiences');
-    if (rows[0].count === 0) {
-      await insertSampleData(connection);
-    }
+    // Start with empty database for fresh testing
+    console.log('✅ Database ready for new experiences');
     
     connection.release();
     console.log('✅ Database initialization complete!');
@@ -151,7 +163,7 @@ async function insertSampleData(connection) {
   ];
 
   for (const exp of sampleExperiences) {
-    await connection.execute(
+    await connection.query(
       `INSERT INTO experiences (title, description, category, client_name, rating, project_value, upvotes, downvotes, comment_count) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [exp.title, exp.description, exp.category, exp.client_name, exp.rating, exp.project_value, exp.upvotes, exp.downvotes, exp.comment_count]
@@ -238,10 +250,11 @@ app.get('/api/health', (req, res) => {
 
 // Get all experiences
 app.get('/api/experiences', async (req, res) => {
+  console.log('📋 GET /api/experiences - Received request');
   try {
     if (await useDatabase()) {
       const connection = await pool.getConnection();
-      const [rows] = await connection.execute(
+      const [rows] = await connection.query(
         'SELECT * FROM experiences ORDER BY created_at DESC'
       );
       connection.release();
@@ -257,6 +270,8 @@ app.get('/api/experiences', async (req, res) => {
 
 // Create new experience
 app.post('/api/experiences', async (req, res) => {
+  console.log('📝 POST /api/experiences - Received request');
+  console.log('Request body:', req.body);
   try {
     const { title, description, category, client_name, rating, project_value } = req.body;
     
@@ -279,7 +294,7 @@ app.post('/api/experiences', async (req, res) => {
 
     if (await useDatabase()) {
       const connection = await pool.getConnection();
-      const [result] = await connection.execute(
+      const [result] = await connection.query(
         `INSERT INTO experiences (title, description, category, client_name, rating, project_value, upvotes, downvotes, comment_count) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [experienceData.title, experienceData.description, experienceData.category, 
@@ -287,7 +302,7 @@ app.post('/api/experiences', async (req, res) => {
          experienceData.upvotes, experienceData.downvotes, experienceData.comment_count]
       );
       
-      const [newExperience] = await connection.execute(
+      const [newExperience] = await connection.query(
         'SELECT * FROM experiences WHERE id = ?',
         [result.insertId]
       );
@@ -320,7 +335,7 @@ app.post('/api/experiences/:id/vote', async (req, res) => {
       const connection = await pool.getConnection();
       
       // Check if user already voted
-      const [existingVote] = await connection.execute(
+      const [existingVote] = await connection.query(
         'SELECT * FROM votes WHERE experience_id = ? AND user_ip = ?',
         [experienceId, userIp]
       );
@@ -331,20 +346,20 @@ app.post('/api/experiences/:id/vote', async (req, res) => {
       }
 
       // Insert vote
-      await connection.execute(
+      await connection.query(
         'INSERT INTO votes (experience_id, vote_type, user_ip) VALUES (?, ?, ?)',
         [experienceId, vote_type, userIp]
       );
 
       // Update experience vote counts
       const voteField = vote_type === 'upvote' ? 'upvotes' : 'downvotes';
-      await connection.execute(
+      await connection.query(
         `UPDATE experiences SET ${voteField} = ${voteField} + 1 WHERE id = ?`,
         [experienceId]
       );
 
       // Get updated experience
-      const [updatedExp] = await connection.execute(
+      const [updatedExp] = await connection.query(
         'SELECT * FROM experiences WHERE id = ?',
         [experienceId]
       );
@@ -408,7 +423,7 @@ app.get('/api/experiences/:id/comments', async (req, res) => {
 
     if (await useDatabase()) {
       const connection = await pool.getConnection();
-      const [comments] = await connection.execute(
+      const [comments] = await connection.query(
         'SELECT * FROM comments WHERE experience_id = ? ORDER BY created_at DESC',
         [experienceId]
       );
@@ -448,18 +463,18 @@ app.post('/api/experiences/:id/comments', async (req, res) => {
     if (await useDatabase()) {
       const connection = await pool.getConnection();
       
-      const [result] = await connection.execute(
+      const [result] = await connection.query(
         'INSERT INTO comments (experience_id, content, username, user_ip) VALUES (?, ?, ?, ?)',
         [commentData.experience_id, commentData.content, commentData.username, commentData.user_ip]
       );
 
       // Update comment count
-      await connection.execute(
+      await connection.query(
         'UPDATE experiences SET comment_count = comment_count + 1 WHERE id = ?',
         [experienceId]
       );
 
-      const [newComment] = await connection.execute(
+      const [newComment] = await connection.query(
         'SELECT * FROM comments WHERE id = ?',
         [result.insertId]
       );
@@ -492,12 +507,13 @@ app.use((error, req, res, next) => {
 
 // Start server
 async function startServer() {
-  await initializeDatabase();
-  
-  const dbStatus = await useDatabase();
-  
-  app.listen(PORT, () => {
-    console.log(`
+  try {
+    await initializeDatabase();
+    
+    const dbStatus = await useDatabase();
+    
+    app.listen(PORT, () => {
+      console.log(`
 🚀 FreelancerGuard API Server Started!
 📡 Server running on: http://localhost:${PORT}
 🔗 Health Check: http://localhost:${PORT}/api/health        
@@ -506,7 +522,11 @@ ${dbStatus ? '🗄️  Database: MySQL Connected' : '💾 Database: In-Memory St
 ✅ Ready for frontend connections!
 🎯 Frontend should connect to: http://localhost:5173
 ────────────────────────────────────────────────`);
-  });
+    });
+  } catch (error) {
+    console.error('❌ Server startup failed:', error);
+    process.exit(1);
+  }
 }
 
-startServer().catch(console.error);
+startServer();

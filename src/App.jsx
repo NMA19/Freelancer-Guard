@@ -47,6 +47,7 @@ const MainApp = () => {
 
   // Optimized experience creation
   const handleAddExperience = useCallback(async (experienceData) => {
+    console.log('🚀 Frontend: Submitting experience:', experienceData);
     try {
       const response = await fetch('http://localhost:5000/api/experiences', {
         method: 'POST',
@@ -54,13 +55,21 @@ const MainApp = () => {
         body: JSON.stringify(experienceData)
       });
 
-      if (!response.ok) throw new Error('Failed to create experience');
+      console.log('📡 Frontend: Response status:', response.status);
+      console.log('📡 Frontend: Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Frontend: Error response:', errorText);
+        throw new Error(`Failed to create experience: ${response.status} ${errorText}`);
+      }
       
       const newExperience = await response.json();
+      console.log('✅ Frontend: Experience created:', newExperience);
       setExperiences(prev => [newExperience, ...prev]);
       return newExperience;
     } catch (error) {
-      console.error('Error creating experience:', error);
+      console.error('❌ Frontend: Error creating experience:', error);
       throw error;
     }
   }, []);
