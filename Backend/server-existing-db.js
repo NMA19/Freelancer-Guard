@@ -190,13 +190,15 @@ app.post('/api/experiences', async (req, res) => {
 // Vote on experience using your existing schema
 app.post('/api/experiences/:id/vote', async (req, res) => {
   console.log('🗳️ POST /api/experiences/:id/vote - Received request');
+  console.log('Request body:', req.body);
   try {
     const experienceId = parseInt(req.params.id);
-    const { voteType } = req.body;
+    const { voteType, vote_type } = req.body;
+    const actualVoteType = voteType || vote_type; // Support both formats
     const userIp = req.ip || req.connection.remoteAddress;
 
-    if (!['upvote', 'downvote'].includes(voteType)) {
-      return res.status(400).json({ error: 'Invalid vote type' });
+    if (!['upvote', 'downvote'].includes(actualVoteType)) {
+      return res.status(400).json({ error: 'Invalid vote type. Expected "upvote" or "downvote"' });
     }
 
     if (await useDatabase()) {
@@ -212,13 +214,13 @@ app.post('/api/experiences/:id/vote', async (req, res) => {
         // Update existing vote
         await connection.query(
           'UPDATE votes SET vote_type = ?, created_at = NOW() WHERE experience_id = ? AND user_ip = ?',
-          [voteType, experienceId, userIp]
+          [actualVoteType, experienceId, userIp]
         );
       } else {
         // Insert new vote
         await connection.query(
           'INSERT INTO votes (experience_id, vote_type, user_ip, created_at) VALUES (?, ?, ?, NOW())',
-          [experienceId, voteType, userIp]
+          [experienceId, actualVoteType, userIp]
         );
       }
 
@@ -238,7 +240,7 @@ app.post('/api/experiences/:id/vote', async (req, res) => {
         downvotes: parseInt(voteCounts[0]?.downvotes || 0)
       };
       
-      console.log('✅ Vote recorded:', { experienceId, voteType, result });
+      console.log('✅ Vote recorded:', { experienceId, actualVoteType, result });
       res.json(result);
     } else {
       // In-memory fallback
@@ -247,7 +249,7 @@ app.post('/api/experiences/:id/vote', async (req, res) => {
         return res.status(404).json({ error: 'Experience not found' });
       }
 
-      if (voteType === 'upvote') {
+      if (actualVoteType === 'upvote') {
         experience.upvotes = (experience.upvotes || 0) + 1;
       } else {
         experience.downvotes = (experience.downvotes || 0) + 1;
@@ -326,6 +328,115 @@ app.post('/api/experiences/:id/comments', async (req, res) => {
   } catch (error) {
     console.error('❌ Error adding comment:', error);
     res.status(500).json({ error: 'Failed to add comment' });
+  }
+});
+
+// Authentication endpoints
+app.post('/api/auth/register', async (req, res) => {
+  console.log('📝 POST /api/auth/register - Received request');
+  console.log('Request body:', req.body);
+  try {
+    const { username, email, password } = req.body;
+    
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    if (await useDatabase()) {
+      const connection = await pool.getConnection();
+      
+      // Check if user already exists
+      const [existingUser] = await connection.query(
+        'SELECT * FROM users WHERE email = ? OR username = ?',
+        [email, username]
+      );
+
+      if (existingUser.length > 0) {
+        connection.release();
+        return res.status(400).json({ error: 'User already exists with this email or username' });
+      }
+
+      // Insert new user (in a real app, you'd hash the password)
+      const [result] = await connection.query(
+        'INSERT INTO users (username, email, password, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+        [username, email, password] // Note: In production, hash the password!
+      );
+
+      const [newUser] = await connection.query(
+        'SELECT id, username, email, created_at FROM users WHERE id = ?',
+        [result.insertId]
+      );
+
+      connection.release();
+      
+      const user = newUser[0];
+      const token = `mock_token_${user.id}_${Date.now()}`; // Mock token
+      
+      console.log('✅ User registered:', user);
+      res.status(201).json({ user, token, success: true });
+    } else {
+      // In-memory fallback
+      const user = {
+        id: Date.now(),
+        username,
+        email,
+        created_at: new Date().toISOString()
+      };
+      const token = `mock_token_${user.id}`;
+      res.status(201).json({ user, token, success: true });
+    }
+  } catch (error) {
+    console.error('❌ Error registering user:', error);
+    res.status(500).json({ error: 'Failed to register user', details: error.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  console.log('🔑 POST /api/auth/login - Received request');
+  console.log('Request body:', req.body);
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    if (await useDatabase()) {
+      const connection = await pool.getConnection();
+      
+      // Find user by email
+      const [users] = await connection.query(
+        'SELECT id, username, email, password FROM users WHERE email = ?',
+        [email]
+      );
+
+      connection.release();
+
+      if (users.length === 0) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      const user = users[0];
+      
+      // In a real app, you'd compare hashed passwords
+      if (user.password !== password) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      const token = `mock_token_${user.id}_${Date.now()}`; // Mock token
+      const userResponse = { id: user.id, username: user.username, email: user.email };
+      
+      console.log('✅ User logged in:', userResponse);
+      res.json({ user: userResponse, token, success: true });
+    } else {
+      // In-memory fallback - mock successful login
+      const user = { id: 1, username: 'dev_user', email };
+      const token = `mock_token_${user.id}`;
+      res.json({ user, token, success: true });
+    }
+  } catch (error) {
+    console.error('❌ Error logging in user:', error);
+    res.status(500).json({ error: 'Failed to login', details: error.message });
   }
 });
 
