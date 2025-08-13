@@ -76,13 +76,17 @@ const MainApp = () => {
 
   // Optimized vote handler
   const handleVote = useCallback((experienceId, voteData) => {
-    setExperiences(prev => 
-      prev.map(exp => 
+    setExperiences(prev => {
+      return prev.map(exp => 
         exp.id === experienceId 
-          ? { ...exp, upvotes: voteData.upvotes, downvotes: voteData.downvotes }
+          ? { 
+              ...exp, 
+              upvotes: voteData.upvotes || exp.upvotes || 0, 
+              downvotes: voteData.downvotes || exp.downvotes || 0
+            }
           : exp
-      )
-    );
+      );
+    });
   }, []);
 
   // Memoized filtered and sorted experiences

@@ -460,32 +460,66 @@ body {
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.2s ease;
   min-width: 70px;
   justify-content: center;
+  position: relative;
 }
 
 .vote-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.vote-btn:active:not(:disabled) {
+  transform: translateY(0);
+  transition: transform 0.1s ease;
 }
 
 .vote-btn.upvote:hover:not(:disabled) {
   border-color: var(--success-color);
   color: var(--success-color);
-  background: rgba(16, 185, 129, 0.05);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.vote-btn.upvote:active:not(:disabled) {
+  background: rgba(16, 185, 129, 0.2);
 }
 
 .vote-btn.downvote:hover:not(:disabled) {
   border-color: var(--danger-color);
   color: var(--danger-color);
-  background: rgba(239, 68, 68, 0.05);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.vote-btn.downvote:active:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
 }
 
 .vote-btn.loading {
-  opacity: 0.6;
+  opacity: 0.7;
   cursor: not-allowed;
   pointer-events: none;
+  position: relative;
+}
+
+.vote-btn.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .comment-btn {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, memo } from 'react';
+import React, { useState, useCallback, memo, useEffect } from 'react';
 
 // Optimized Experience Card Component with performance improvements
 const ExperienceCard = memo(({ experience, onVote, onRefresh }) => {
@@ -7,6 +7,20 @@ const ExperienceCard = memo(({ experience, onVote, onRefresh }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Local vote state for immediate UI updates
+  const [localVotes, setLocalVotes] = useState({
+    upvotes: experience.upvotes || 0,
+    downvotes: experience.downvotes || 0
+  });
+
+  // Update local votes when experience prop changes
+  useEffect(() => {
+    setLocalVotes({
+      upvotes: experience.upvotes || 0,
+      downvotes: experience.downvotes || 0
+    });
+  }, [experience.upvotes, experience.downvotes]);
 
   // Memoized helper functions to prevent unnecessary re-renders
   const getStars = useCallback((rating) => {
@@ -30,11 +44,20 @@ const ExperienceCard = memo(({ experience, onVote, onRefresh }) => {
     return colors[category] || '#6b7280';
   }, []);
 
-  // Optimized vote handler with debouncing
+  // Optimized vote handler with immediate UI updates
   const handleVote = useCallback(async (voteType) => {
     if (loading) return; // Prevent spam clicking
     
     setLoading(true);
+    
+    // Optimistic update for immediate UI feedback
+    const voteTypeKey = voteType === 'up' ? 'upvotes' : 'downvotes';
+    const optimisticVotes = {
+      ...localVotes,
+      [voteTypeKey]: localVotes[voteTypeKey] + 1
+    };
+    setLocalVotes(optimisticVotes);
+    
     try {
       const vote_type = voteType === 'up' ? 'upvote' : 'downvote';
       
@@ -46,15 +69,36 @@ const ExperienceCard = memo(({ experience, onVote, onRefresh }) => {
 
       if (response.ok) {
         const data = await response.json();
-        if (onVote) onVote(experience.id, data);
+        
+        // Update with actual server response (backend returns votes in result object)
+        const voteResult = data.result || data;
+        setLocalVotes({
+          upvotes: voteResult.upvotes || 0,
+          downvotes: voteResult.downvotes || 0
+        });
+        
+        // Notify parent components with the correct vote data
+        if (onVote) onVote(experience.id, voteResult);
         if (onRefresh) onRefresh();
+      } else {
+        // Revert optimistic update on error
+        setLocalVotes({
+          upvotes: experience.upvotes || 0,
+          downvotes: experience.downvotes || 0
+        });
+        console.error('Vote failed:', response.status);
       }
     } catch (error) {
       console.error('Vote error:', error);
+      // Revert optimistic update on error
+      setLocalVotes({
+        upvotes: experience.upvotes || 0,
+        downvotes: experience.downvotes || 0
+      });
     } finally {
       setLoading(false);
     }
-  }, [experience.id, loading, onVote, onRefresh]);
+  }, [experience.id, experience.upvotes, experience.downvotes, loading, localVotes, onVote, onRefresh]);
 
   // Optimized comment loading
   const loadComments = useCallback(async () => {
@@ -158,7 +202,7 @@ const ExperienceCard = memo(({ experience, onVote, onRefresh }) => {
             onClick={() => handleVote('up')}
             disabled={loading}
           >
-            👍 {experience.upvotes || 0}
+            👍 {localVotes.upvotes}
           </button>
           
           <button 
@@ -166,7 +210,7 @@ const ExperienceCard = memo(({ experience, onVote, onRefresh }) => {
             onClick={() => handleVote('down')}
             disabled={loading}
           >
-            👎 {experience.downvotes || 0}
+            👎 {localVotes.downvotes}
           </button>
         </div>
 

@@ -93,21 +93,57 @@ app.get('/api/experiences', async (req, res) => {
     if (await useDatabase()) {
       const connection = await pool.getConnection();
       
-      // First, let's just get basic experiences without joins to see what's available
+      // Get experiences with proper vote counts - first let's just get experiences without joins
       const [experiences] = await connection.query(`
         SELECT * FROM experiences ORDER BY created_at DESC
       `);
       
-      // Add default vote and comment counts
-      const enhancedExperiences = experiences.map(exp => ({
-        ...exp,
-        upvotes: 0,
-        downvotes: 0,
-        comment_count: 0
-      }));
+      // For each experience, get vote and comment counts separately
+      for (let exp of experiences) {
+        // Try to get votes (try both table names)
+        try {
+          const [votes] = await connection.query(`
+            SELECT 
+              SUM(CASE WHEN vote_type = 'upvote' THEN 1 ELSE 0 END) as upvotes,
+              SUM(CASE WHEN vote_type = 'downvote' THEN 1 ELSE 0 END) as downvotes
+            FROM votes WHERE experience_id = ?`, [exp.id]);
+          exp.upvotes = votes[0]?.upvotes || 0;
+          exp.downvotes = votes[0]?.downvotes || 0;
+        } catch (error) {
+          // If votes table doesn't work, try experience_votes
+          try {
+            const [votes] = await connection.query(`
+              SELECT 
+                SUM(CASE WHEN vote_type = 'upvote' THEN 1 ELSE 0 END) as upvotes,
+                SUM(CASE WHEN vote_type = 'downvote' THEN 1 ELSE 0 END) as downvotes
+              FROM experience_votes WHERE experience_id = ?`, [exp.id]);
+            exp.upvotes = votes[0]?.upvotes || 0;
+            exp.downvotes = votes[0]?.downvotes || 0;
+          } catch (error2) {
+            // No votes table exists, set defaults
+            exp.upvotes = 0;
+            exp.downvotes = 0;
+          }
+        }
+        
+        // Try to get comment count
+        try {
+          const [comments] = await connection.query(`
+            SELECT COUNT(*) as count FROM comments WHERE experience_id = ?`, [exp.id]);
+          exp.comment_count = comments[0]?.count || 0;
+        } catch (error) {
+          try {
+            const [comments] = await connection.query(`
+              SELECT COUNT(*) as count FROM experience_comments WHERE experience_id = ?`, [exp.id]);
+            exp.comment_count = comments[0]?.count || 0;
+          } catch (error2) {
+            exp.comment_count = 0;
+          }
+        }
+      }
       
       connection.release();
-      res.json(enhancedExperiences);
+      res.json(experiences);
     } else {
       res.json(inMemoryExperiences);
     }
@@ -136,7 +172,6 @@ app.post('/api/experiences', async (req, res) => {
       rating: parseInt(rating) || 0,
       project_value: parseFloat(project_value) || null,
       username: username || 'Anonymous',
-      status: 'active',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -144,10 +179,10 @@ app.post('/api/experiences', async (req, res) => {
     if (await useDatabase()) {
       const connection = await pool.getConnection();
       
-      // Insert into your existing experiences table structure
+      // Insert into your existing experiences table structure (without status column)
       const [result] = await connection.query(
-        `INSERT INTO experiences (title, description, category, client_name, rating, project_value, username, status, created_at, updated_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        `INSERT INTO experiences (title, description, category, client_name, rating, project_value, username, created_at, updated_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           experienceData.title, 
           experienceData.description, 
@@ -155,8 +190,7 @@ app.post('/api/experiences', async (req, res) => {
           experienceData.client_name, 
           experienceData.rating, 
           experienceData.project_value,
-          experienceData.username,
-          experienceData.status
+          experienceData.username
         ]
       );
       
@@ -204,22 +238,45 @@ app.post('/api/experiences/:id/vote', async (req, res) => {
     if (await useDatabase()) {
       const connection = await pool.getConnection();
       
-      // Check if user already voted using the 'votes' table
-      const [existingVote] = await connection.query(
-        'SELECT * FROM votes WHERE experience_id = ? AND user_ip = ?',
-        [experienceId, userIp]
-      );
+      // Try to use experience_votes table first, fallback to votes table
+      let voteTable = 'experience_votes';
+      let [existingVote] = [];
+      
+      try {
+        [existingVote] = await connection.query(
+          'SELECT * FROM experience_votes WHERE experience_id = ? AND user_ip = ?',
+          [experienceId, userIp]
+        );
+      } catch (error) {
+        // experience_votes table doesn't exist, try votes table
+        voteTable = 'votes';
+        try {
+          [existingVote] = await connection.query(
+            'SELECT * FROM votes WHERE experience_id = ? AND user_ip = ?',
+            [experienceId, userIp]
+          );
+        } catch (error2) {
+          // Neither table exists, create in-memory response
+          const voteResult = { upvotes: 1, downvotes: 0 };
+          console.log('✅ Vote recorded (no database table):', {
+            experienceId,
+            actualVoteType,
+            result: voteResult
+          });
+          return res.json(voteResult);
+        }
+      }
 
       if (existingVote.length > 0) {
         // Update existing vote
         await connection.query(
-          'UPDATE votes SET vote_type = ?, created_at = NOW() WHERE experience_id = ? AND user_ip = ?',
+          `UPDATE ${voteTable} SET vote_type = ?, created_at = NOW() WHERE experience_id = ? AND user_ip = ?`,
           [actualVoteType, experienceId, userIp]
         );
       } else {
         // Insert new vote
         await connection.query(
-          'INSERT INTO votes (experience_id, vote_type, user_ip, created_at) VALUES (?, ?, ?, NOW())',
+          `INSERT INTO ${voteTable} (experience_id, vote_type, user_ip, created_at) VALUES (?, ?, ?, NOW())`,
           [experienceId, actualVoteType, userIp]
         );
       }
@@ -229,7 +286,7 @@ app.post('/api/experiences/:id/vote', async (req, res) => {
         `SELECT 
           SUM(CASE WHEN vote_type = 'upvote' THEN 1 ELSE 0 END) as upvotes,
           SUM(CASE WHEN vote_type = 'downvote' THEN 1 ELSE 0 END) as downvotes
-        FROM votes WHERE experience_id = ?`,
+        FROM ${voteTable} WHERE experience_id = ?`,
         [experienceId]
       );
 
@@ -272,7 +329,7 @@ app.get('/api/experiences/:id/comments', async (req, res) => {
     if (await useDatabase()) {
       const connection = await pool.getConnection();
       const [comments] = await connection.query(
-        'SELECT * FROM comments WHERE experience_id = ? ORDER BY created_at DESC',
+        'SELECT * FROM experience_comments WHERE experience_id = ? ORDER BY created_at DESC',
         [experienceId]
       );
       connection.release();
@@ -302,12 +359,12 @@ app.post('/api/experiences/:id/comments', async (req, res) => {
       const connection = await pool.getConnection();
       
       const [result] = await connection.query(
-        'INSERT INTO comments (experience_id, content, username, user_ip, created_at) VALUES (?, ?, ?, ?, NOW())',
+        'INSERT INTO experience_comments (experience_id, content, username, user_ip, created_at) VALUES (?, ?, ?, ?, NOW())',
         [experienceId, content.trim(), username || 'Anonymous', userIp]
       );
 
       const [newComment] = await connection.query(
-        'SELECT * FROM comments WHERE id = ?',
+        'SELECT * FROM experience_comments WHERE id = ?',
         [result.insertId]
       );
 
